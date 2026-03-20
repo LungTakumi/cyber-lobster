@@ -291,6 +291,25 @@ var random_events = {
 		"resentment": 15,
 		"productivity": -5,
 		"weight": 6
+	},
+	# New Events Added
+	"boss_visit": {
+		"name": "Boss Visit!",
+		"desc": "The boss dropped by unexpectedly!",
+		"money": 100,
+		"stress": 15,
+		"resentment": 10,
+		"productivity": -5,
+		"weight": 12
+	},
+	"cat_video": {
+		"name": "Cat Video Break",
+		"desc": "Watched some adorable cat videos. So relaxing!",
+		"money": 0,
+		"stress": -18,
+		"resentment": -12,
+		"productivity": 3,
+		"weight": 15
 	}
 }
 
@@ -314,7 +333,8 @@ var achievements = {
 	# New Achievements
 	"workhorse": {"name": "Workhorse", "desc": "Complete 50 high-intensity work sessions", "unlocked": false},
 	"balanced_player": {"name": "Balanced Player", "desc": "Complete 30 medium-intensity work sessions", "unlocked": false},
-	"zen_master": {"name": "True Zen Master", "desc": "Reach day 50 with 0 stress and 0 resentment", "unlocked": false}
+	"zen_master": {"name": "True Zen Master", "desc": "Reach day 50 with 0 stress and 0 resentment", "unlocked": false},
+	"lucky_lobster": {"name": "Lucky Lobster", "desc": "Experience 10 random events", "unlocked": false}
 }
 
 var items_purchased_count: int = 0
@@ -475,7 +495,7 @@ func reset_game():
 	}
 	achievements = {
 		"first_money": {"name": "First Dollar", "desc": "Earn your first $100", "unlocked": false},
-		"rich": {"name": "Rich Lobster", "desc": "Accumulate $1000", "unlocked": false},
+		"rich": {"name": "Richich Lobster", "desc": "Accumulate $1000", "unlocked": false},
 		"millionaire": {"name": "Millionaire", "desc": "Accumulate $10000", "unlocked": false},
 		"stressed": {"name": "High Stress", "desc": "Reach 90 stress", "unlocked": false},
 		"burnout": {"name": "Burnout", "desc": "Reach 100 stress", "unlocked": false},
@@ -485,7 +505,11 @@ func reset_game():
 		"lazy": {"name": "Lazy Lobster", "desc": "Evolve to Lazy type", "unlocked": false},
 		"survivor": {"name": "Survivor", "desc": "Survive 30 days", "unlocked": false},
 		"workaholic": {"name": "Workaholic", "desc": "Have 100 productivity", "unlocked": false},
-		"shop_hoarder": {"name": "Shop Hoarder", "desc": "Buy 10 items from shop", "unlocked": false}
+		"shop_hoarder": {"name": "Shop Hoarder", "desc": "Buy 10 items from shop", "unlocked": false},
+		"workhorse": {"name": "Workhorse", "desc": "Complete 50 high-intensity work sessions", "unlocked": false},
+		"balanced_player": {"name": "Balanced Player", "desc": "Complete 30 medium-intensity work sessions", "unlocked": false},
+		"zen_master": {"name": "True Zen Master", "desc": "Reach day 50 with 0 stress and 0 resentment", "unlocked": false},
+		"lucky_lobster": {"name": "Lucky Lobster", "desc": "Experience 10 random events", "unlocked": false}
 	}
 	items_purchased_count = 0
 	_update_lobster_appearance()
@@ -748,6 +772,10 @@ func _check_achievements():
 	if items_purchased_count >= 10 and not achievements["shop_hoarder"]["unlocked"]:
 		achievements["shop_hoarder"]["unlocked"] = true
 		new_achievements.append("shop_hoarder")
+	
+	if game_data["stats"]["events_triggered"] >= 10 and not achievements["lucky_lobster"]["unlocked"]:
+		achievements["lucky_lobster"]["unlocked"] = true
+		new_achievements.append("lucky_lobster")
 	
 	# Show achievement notification
 	if new_achievements.size() > 0:
