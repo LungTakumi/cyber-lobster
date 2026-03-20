@@ -3,6 +3,9 @@ extends Node
 # 粒子效果管理器
 var particle_manager: Node
 
+# 音效管理器
+var audio_manager: Node
+
 # 背景装饰节点
 var background_particles: Array = []
 
@@ -239,6 +242,10 @@ func _ready():
 	particle_manager = load("res://scripts/particle_manager.gd").new()
 	add_child(particle_manager)
 	
+	# 初始化音效管理器
+	audio_manager = load("res://scripts/audio_manager.gd").new()
+	add_child(audio_manager)
+	
 	# Check if save exists
 	has_save_game = _check_save_exists()
 	_create_lobster_sprite()
@@ -272,7 +279,7 @@ func save_game() -> bool:
 		"achievements": achievements,
 		"items_purchased_count": items_purchased_count,
 		"current_phase": current_phase,
-		"version": "1.1.0"
+		"version": "1.2.0"
 	}
 	
 	var json_string = JSON.stringify(save_data)
@@ -281,9 +288,13 @@ func save_game() -> bool:
 		file.store_string(json_string)
 		file.close()
 		_show_notification("💾 Game Saved!")
+		if audio_manager:
+			audio_manager.play_success()
 		return true
 	else:
 		_show_notification("❌ Save Failed!")
+		if audio_manager:
+			audio_manager.play_failure()
 		return false
 
 func load_game() -> bool:
@@ -414,12 +425,16 @@ func start_new_game():
 	reset_game()
 	main_menu.visible = false
 	is_in_menu = false
+	if audio_manager:
+		audio_manager.play_daily_start()
 	start_morning()
 
 func continue_game():
 	if load_game():
 		main_menu.visible = false
 		is_in_menu = false
+		if audio_manager:
+			audio_manager.play_daily_start()
 		start_morning()
 	else:
 		_show_notification("❌ Failed to load save!")
@@ -489,6 +504,10 @@ func start_sleep():
 	start_morning()
 
 func _trigger_random_event():
+	# 随机事件音效
+	if audio_manager:
+		audio_manager.play_event()
+	
 	var event_keys = random_events.keys()
 	var total_weight = 0
 	for key in event_keys:
@@ -594,6 +613,10 @@ func _check_achievements():
 		spawn_star_effect(self, lobster_sprite.position)
 		spawn_success_effect(self, lobster_sprite.position)
 		
+		# 成就音效
+		if audio_manager:
+			audio_manager.play_achievement()
+		
 		var achievement_text = "🏆 ACHIEVEMENT UNLOCKED!\n\n"
 		for key in new_achievements:
 			achievement_text += "• %s: %s\n" % [achievements[key]["name"], achievements[key]["desc"]]
@@ -697,6 +720,9 @@ func _on_choice_selected(key: String):
 			select_response(key)
 
 func select_activity(activity_key: String):
+	if audio_manager:
+		audio_manager.play_click()
+	
 	today_activity = activity_key
 	var activity = activities[activity_key]
 	
@@ -710,30 +736,49 @@ func select_activity(activity_key: String):
 		# 成功粒子效果
 		spawn_coin_effect(self, lobster_sprite.position, 15)
 		spawn_success_effect(self, lobster_sprite.position)
+		if audio_manager:
+			audio_manager.play_success()
 	else:
 		game_data["money"] += randi_range(0, 10)
 		# 失败粒子效果
 		spawn_negative_effect(self, lobster_sprite.position)
+		if audio_manager:
+			audio_manager.play_failure()
 	
 	game_data["stress"] = clamp(game_data["stress"] + activity["stress"], 0, 100)
 	game_data["resentment"] = clamp(game_data["resentment"] + activity["resentment"], 0, 100)
 	
+	# 压力相关音效
+	if activity["stress"] > 0 and audio_manager:
+		audio_manager.play_stress()
+	elif activity["stress"] < 0 and audio_manager:
+		audio_manager.play_relief()
+	
 	start_evening()
 
 func select_response(response_type: String):
+	if audio_manager:
+		audio_manager.play_click()
+	
 	match response_type:
 		"scold":
 			game_data["stress"] = clamp(game_data["stress"] + 10, 0, 100)
 			game_data["resentment"] = clamp(game_data["resentment"] + 20, 0, 100)
 			spawn_negative_effect(self, lobster_sprite.position)
+			if audio_manager:
+				audio_manager.play_failure()
 		"pua":
 			game_data["stress"] = clamp(game_data["stress"] + 5, 0, 100)
 			game_data["resentment"] = clamp(game_data["resentment"] - 5, 0, 100)
 			spawn_stress_effect(self, lobster_sprite.position, false)
+			if audio_manager:
+				audio_manager.play_stress()
 		"comfort":
 			game_data["stress"] = clamp(game_data["stress"] - 5, 0, 100)
 			game_data["resentment"] = clamp(game_data["resentment"] - 10, 0, 100)
 			spawn_success_effect(self, lobster_sprite.position)
+			if audio_manager:
+				audio_manager.play_relief()
 	
 	start_shop()
 
@@ -747,6 +792,11 @@ func _on_shop_item_selected(item_key: String):
 		# 购买成功粒子效果
 		spawn_coin_effect(self, lobster_sprite.position, 8)
 		spawn_halo_effect(self, lobster_sprite.position)
+		
+		# 购买音效
+		if audio_manager:
+			audio_manager.play_purchase()
+			audio_manager.play_coin()
 		
 		if item.has("stress_mod"):
 			game_data["stress"] = clamp(game_data["stress"] + item["stress_mod"], 0, 100)
