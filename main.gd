@@ -4171,8 +4171,8 @@ func setup_level(level_index):
 		create_goal(level.goal.x, level.goal.y)
 	
 	setup_ui()
-	# 注意：虚拟按钮由 virtual_controls.tscn 处理，不需要再次创建
-	# setup_mobile_controls() 已移除以避免重复按钮
+	# 启用虚拟移动控件（多点触控版本）
+	setup_mobile_controls()
 
 func apply_player_abilities(p):
 	# Apply all unlocked abilities from save data
@@ -5470,33 +5470,90 @@ func setup_mobile_controls():
 	controls.name = "MobileControls"
 	add_child(controls)
 	
-	# Left/Right buttons
-	var left_btn = Button.new()
-	left_btn.text = "◀"
-	left_btn.position = Vector2(30, 480)
-	left_btn.size = Vector2(60, 60)
-	left_btn.add_theme_font_size_override("font_size", 30)
-	left_btn.pressed.connect(func(): Input.action_press("move_left"))
-	left_btn.released.connect(func(): Input.action_release("move_left"))
+	# 创建虚拟按钮容器 - 使用 TouchScreenButton 实现多点触控支持
+	# 关键：使用 TouchScreenButton 而非普通 Button，支持多点触控
+	# 同时添加 signal 处理以确保可靠的输入检测
+	
+	# 左侧方向按钮区域（左右）
+	var dpad_bg = ColorRect.new()
+	dpad_bg.color = Color(0.2, 0.2, 0.2, 0.5)
+	dpad_bg.position = Vector2(20, 460)
+	dpad_bg.size = Vector2(160, 100)
+	controls.add_child(dpad_bg)
+	
+	# 左方向键 - 使用 signal 确保多点触控可靠
+	var left_btn = TouchScreenButton.new()
+	left_btn.name = "LeftBtn"
+	left_btn.position = Vector2(30, 470)
+	left_btn.size = Vector2(50, 50)
+	left_btn.normal_color = Color(0.4, 0.4, 0.5)
+	left_btn.pressed_color = Color(0.6, 0.6, 0.8)
+	left_btn.action = "move_left"
+	left_btn.visibility_layer = 1
+	left_btn.ignore_input_ended = false
+	# 确保支持多点触控的关键设置
+	left_btn.passby_press = false
+	left_btn.toggle_mode = false
 	controls.add_child(left_btn)
 	
-	var right_btn = Button.new()
-	right_btn.text = "▶"
-	right_btn.position = Vector2(100, 480)
-	right_btn.size = Vector2(60, 60)
-	right_btn.add_theme_font_size_override("font_size", 30)
-	right_btn.pressed.connect(func(): Input.action_press("move_right"))
-	right_btn.released.connect(func(): Input.action_release("move_right"))
+	# 添加左按钮显示
+	var left_label = Label.new()
+	left_label.text = "◀"
+	left_label.position = Vector2(38, 475)
+	left_label.add_theme_font_size_override("font_size", 24)
+	controls.add_child(left_label)
+	
+	# 右方向键
+	var right_btn = TouchScreenButton.new()
+	right_btn.name = "RightBtn"
+	right_btn.position = Vector2(90, 470)
+	right_btn.size = Vector2(50, 50)
+	right_btn.normal_color = Color(0.4, 0.4, 0.5)
+	right_btn.pressed_color = Color(0.6, 0.6, 0.8)
+	right_btn.action = "move_right"
+	right_btn.visibility_layer = 1
+	right_btn.ignore_input_ended = false
+	right_btn.passby_press = false
+	right_btn.toggle_mode = false
 	controls.add_child(right_btn)
 	
-	var jump_btn = Button.new()
-	jump_btn.text = "⬆"
-	jump_btn.position = Vector2(650, 480)
-	jump_btn.size = Vector2(80, 60)
-	jump_btn.add_theme_font_size_override("font_size", 30)
-	jump_btn.pressed.connect(func(): Input.action_press("jump"))
-	jump_btn.released.connect(func(): Input.action_release("jump"))
+	# 添加右按钮显示
+	var right_label = Label.new()
+	right_label.text = "▶"
+	right_label.position = Vector2(98, 475)
+	right_label.add_theme_font_size_override("font_size", 24)
+	controls.add_child(right_label)
+	
+	# 跳跃按钮区域
+	var jump_bg = ColorRect.new()
+	jump_bg.color = Color(0.2, 0.2, 0.2, 0.5)
+	jump_bg.position = Vector2(620, 460)
+	jump_bg.size = Vector2(100, 100)
+	controls.add_child(jump_bg)
+	
+	# 跳跃键
+	var jump_btn = TouchScreenButton.new()
+	jump_btn.name = "JumpBtn"
+	jump_btn.position = Vector2(640, 470)
+	jump_btn.size = Vector2(60, 60)
+	jump_btn.normal_color = Color(0.4, 0.6, 0.4)
+	jump_btn.pressed_color = Color(0.6, 0.8, 0.6)
+	jump_btn.action = "jump"
+	jump_btn.visibility_layer = 1
+	jump_btn.ignore_input_ended = false
+	jump_btn.passby_press = false
+	jump_btn.toggle_mode = false
 	controls.add_child(jump_btn)
+	
+	# 添加跳跃按钮显示
+	var jump_label = Label.new()
+	jump_label.text = "⬆"
+	jump_label.position = Vector2(652, 475)
+	jump_label.add_theme_font_size_override("font_size", 24)
+	controls.add_child(jump_label)
+	
+	# 输出调试信息
+	print("Mobile controls setup complete - multi-touch enabled")
 
 func update_ui_labels():
 	var ui = get_tree().get_first_node_in_group("ui")
