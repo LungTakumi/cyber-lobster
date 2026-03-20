@@ -58,6 +58,7 @@ var achievements = {
 }
 var boss_damage_taken = false
 var level_deaths = 0
+var health_regen_timer = 0.0
 var is_paused = false  # ⏸️ Pause state
 
 # Metroidvania: Save system
@@ -89,7 +90,9 @@ const ABILITIES = {
 	"time_rewind": {"name": "Time Rewind", "desc": "Press R to rewind time", "icon": "🔄"},
 	"energy_shield": {"name": "Energy Shield", "desc": "Press F to block 1 hit", "icon": "🛡️"},
 	"phase_shift": {"name": "Phase Shift", "desc": "Press Q to dodge through enemies", "icon": "👻"},
-	"tracking_projectile": {"name": "Tracking Shot", "desc": "Press T to fire homing missile", "icon": "🎯"}
+	"tracking_projectile": {"name": "Tracking Shot", "desc": "Press T to fire homing missile", "icon": "🎯"},
+	"magic_wand": {"name": "Magic Wand", "desc": "Press V to fire magic blast", "icon": "🪄"},
+	"health_regen": {"name": "Health Regen", "desc": "Slowly recover health over time", "icon": "❤️"}
 }
 
 # Skill Tree System - Ability upgrades
@@ -2560,6 +2563,19 @@ func _process(delta):
 		
 		# Random event system - chance to trigger special events
 		trigger_random_event(delta)
+		
+		# Health Regen ability - recover 1 life every 3 seconds
+		if has_ability("health_regen") and player:
+			health_regen_timer += delta
+			if health_regen_timer >= 3.0:
+				health_regen_timer = 0.0
+				if lives < 99:  # Max 99 lives
+					lives += 1
+					update_lives_display()
+					# Show recovery effect
+					player.modulate = Color(0.3, 1.0, 0.3)
+					await get_tree().create_timer(0.2).timeout
+					player.modulate = Color.WHITE
 
 func show_start_screen():
 	game_started = false
@@ -2711,7 +2727,9 @@ var shop_items = {
 	"bounce": {"name": "Bounce", "desc": "Jump again in air to bounce", "icon": "⭕", "price": 250},
 	"time_rewind": {"name": "Time Rewind", "desc": "Press R to rewind time", "icon": "🔄", "price": 500},
 	"energy_shield": {"name": "Energy Shield", "desc": "Press F to block 1 hit", "icon": "🛡️", "price": 450},
-	"phase_shift": {"name": "Phase Shift", "desc": "Press Q to dodge through enemies", "icon": "👻", "price": 550}
+	"phase_shift": {"name": "Phase Shift", "desc": "Press Q to dodge through enemies", "icon": "👻", "price": 550},
+	"magic_wand": {"name": "Magic Wand", "desc": "Press V to fire magic blast", "icon": "🪄", "price": 600},
+	"health_regen": {"name": "Health Regen", "desc": "Slowly recover health over time", "icon": "❤️", "price": 350}
 }
 
 func show_shop():
@@ -4200,6 +4218,10 @@ func apply_player_abilities(p):
 		p.activate_phase_shift_ability()
 	if has_ability("tracking_projectile"):
 		p.activate_tracking_projectile_ability()
+	if has_ability("magic_wand"):
+		p.can_magic_wand = true
+	if has_ability("health_regen"):
+		p.has_health_regen = true
 
 func create_player_visual(p):
 	# Create lobster character using polygons
@@ -5885,7 +5907,7 @@ func trigger_random_event(delta):
 	last_random_event_time = random_event_timer
 	
 	# Pick random event
-	var events = ["coin_rain", "speed_boost", "mystery_gift", "enemies_appear"]
+	var events = ["coin_rain", "speed_boost", "mystery_gift", "enemies_appear", "star_shower"]
 	var event = events[randi() % events.size()]
 	active_random_event = event
 	
@@ -5898,6 +5920,8 @@ func trigger_random_event(delta):
 			trigger_mystery_gift()
 		"enemies_appear":
 			trigger_enemy_swarm()
+		"star_shower":
+			trigger_star_shower()
 
 func trigger_coin_rain():
 	if not player:
@@ -5940,6 +5964,20 @@ func trigger_enemy_swarm():
 	create_enemy(spawn_x + 100, player.global_position.y + 50, "slime", 1, spawn_x + 50, spawn_x + 150)
 	
 	show_event_notification("⚠️ Enemy Swarm!")
+
+func trigger_star_shower():
+	if not player:
+		return
+	
+	# Spawn stars falling from sky
+	for i in range(10):
+		await get_tree().create_timer(randf_range(0.1, 0.4)).timeout
+		
+		var star_x = player.global_position.x + randf_range(-250, 250)
+		var star_y = -50
+		create_star(star_x, star_y)
+	
+	show_event_notification("⭐ Star Shower!")
 
 func show_event_notification(text: String):
 	var ui = get_tree().get_first_node_in_group("ui")

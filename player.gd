@@ -21,6 +21,7 @@ var can_time_slow: bool = false
 var can_shadow_clone: bool = false
 var can_combo_finale: bool = false
 var has_permanent_double_jump: bool = false
+var can_magic_wand: bool = false
 
 # 状态
 var is_invincible: bool = false
