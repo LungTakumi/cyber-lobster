@@ -258,6 +258,22 @@ var shop_items = {
 		"slot": "skill",
 		"skill": "heal",
 		"desc": "Unlock Heal skill in combat!"
+	},
+	# New Ability - Double Jump
+	"jet_boosters": {
+		"name": "🚀 Jet Boosters",
+		"cost": 1500,
+		"slot": "skill",
+		"skill": "double_jump",
+		"desc": "Unlock Double Jump ability - jump again in mid-air!"
+	},
+	# Wall Jump Ability
+	"wall_grapple": {
+		"name": "🧗 Wall Grapple",
+		"cost": 2000,
+		"slot": "skill",
+		"skill": "wall_jump",
+		"desc": "Unlock Wall Jump - climb and jump off walls!"
 	}
 }
 
@@ -483,6 +499,7 @@ var bosses = {
 
 var unlocked_skills = {
 	"double_jump": false,
+	"wall_jump": false,
 	"dash": false,
 	"ground_slam": false,
 	"magic_shot": false,
@@ -490,6 +507,8 @@ var unlocked_skills = {
 }
 
 var skill_cooldowns = {
+	"double_jump": 0.0,
+	"wall_jump": 0.0,
 	"dash": 0.0,
 	"ground_slam": 0.0,
 	"magic_shot": 0.0,
@@ -668,7 +687,7 @@ func _create_combat_hud():
 	combat_ui.add_child(attack_btn)
 	
 	# Skill buttons
-	var skills = ["dash", "ground_slam", "magic_shot", "heal"]
+	var skills = ["double_jump", "wall_jump", "dash", "ground_slam", "magic_shot", "heal"]
 	var skill_x = 20
 	for skill in skills:
 		var btn = Button.new()
@@ -696,6 +715,8 @@ func _create_combat_hud():
 
 func _get_skill_icon(skill: String) -> String:
 	match skill:
+		"double_jump": return "🚀"
+		"wall_jump": return "🧗"
 		"dash": return "💨"
 		"ground_slam": return "🔨"
 		"magic_shot": return "✨"
@@ -1011,10 +1032,31 @@ func _on_skill_pressed(skill: String):
 		return
 	
 	match skill:
+		"double_jump": _perform_double_jump()
+		"wall_jump": _perform_wall_jump()
 		"dash": _perform_dash()
 		"ground_slam": _perform_ground_slam()
 		"magic_shot": _perform_magic_shot()
 		"heal": _perform_heal()
+
+func _perform_double_jump():
+	# Double Jump is a passive ability - just show a notification
+	if unlocked_skills.get("double_jump", false):
+		_show_notification("🚀 Double Jump activated! Jump again in mid-air!")
+		# In actual player implementation, this enables the second jump
+		skill_cooldowns["double_jump"] = 0.0  # No cooldown for passive ability
+	else:
+		_show_notification("🔒 You need to unlock Double Jump first!")
+	_update_combat_ui()
+
+func _perform_wall_jump():
+	# Wall Jump is a passive ability
+	if unlocked_skills.get("wall_jump", false):
+		_show_notification("🧗 Wall Jump activated! Jump off walls!")
+		skill_cooldowns["wall_jump"] = 0.0
+	else:
+		_show_notification("🔒 You need to unlock Wall Jump first!")
+	_update_combat_ui()
 
 func _perform_dash():
 	skill_cooldowns["dash"] = 5.0
