@@ -27,7 +27,22 @@ var game_data = {
 		"floor": null,
 		"ceiling": null
 	},
-	"inventory": []
+	"inventory": [],
+	# Game Statistics
+	"stats": {
+		"total_work_days": 0,
+		"high_work_count": 0,
+		"medium_work_count": 0,
+		"slack_off_count": 0,
+		"total_earned": 0,
+		"total_spent": 0,
+		"scold_count": 0,
+		"pua_count": 0,
+		"comfort_count": 0,
+		"events_triggered": 0,
+		"achievements_unlocked": 0,
+		"best_day_income": 0
+	}
 }
 
 enum Phase { MORNING_SCHEDULE, EVENING_DIALOGUE, NIGHT_SHOP, NIGHT_SLEEP }
@@ -108,6 +123,47 @@ var shop_items = {
 		"stress_mod": -15,
 		"resentment_mod": -10,
 		"desc": "-15 Stress, -10 Resentment"
+	},
+	# New Items
+	"ergonomic_chair": {
+		"name": "Ergonomic Chair",
+		"cost": 350,
+		"slot": "floor",
+		"stress_mod": -15,
+		"productivity_mod": 10,
+		"desc": "-15 Stress, +10 Productivity"
+	},
+	"air_purifier": {
+		"name": "Smart Air Purifier",
+		"cost": 250,
+		"slot": "desk",
+		"stress_mod": -12,
+		"productivity_mod": 5,
+		"desc": "-12 Stress, +5 Productivity"
+	},
+	"standing_desk": {
+		"name": "Standing Desk",
+		"cost": 450,
+		"slot": "desk",
+		"stress_mod": -8,
+		"productivity_mod": 20,
+		"desc": "-8 Stress, +20 Productivity"
+	},
+	"ambient_lighting": {
+		"name": "Ambient RGB Lighting",
+		"cost": 180,
+		"slot": "wall",
+		"stress_mod": -18,
+		"resentment_mod": -5,
+		"desc": "-18 Stress, -5 Resentment"
+	},
+	"plant_collection": {
+		"name": "Desktop Plant Collection",
+		"cost": 120,
+		"slot": "desk",
+		"stress_mod": -14,
+		"productivity_mod": 3,
+		"desc": "-14 Stress, +3 Productivity"
 	}
 }
 
@@ -188,6 +244,34 @@ var random_events = {
 		"resentment": 0,
 		"productivity": 20,
 		"weight": 8
+	},
+	# New Events
+	"health_check": {
+		"name": "Health Checkup",
+		"desc": "Your lobster got a checkup! All healthy.",
+		"money": -30,
+		"stress": -15,
+		"resentment": -10,
+		"productivity": 5,
+		"weight": 10
+	},
+	"teammate_visit": {
+		"name": "Teammate Visit",
+		"desc": "A coworker visited and brought snacks!",
+		"money": 0,
+		"stress": -12,
+		"resentment": -8,
+		"productivity": 8,
+		"weight": 12
+	},
+	"system_hack": {
+		"name": "System Hacked!",
+		"desc": "Oh no! A hacker breached the system!",
+		"money": -200,
+		"stress": 25,
+		"resentment": 15,
+		"productivity": -5,
+		"weight": 6
 	}
 }
 
@@ -207,7 +291,11 @@ var achievements = {
 	"lazy": {"name": "Lazy Lobster", "desc": "Evolve to Lazy type", "unlocked": false},
 	"survivor": {"name": "Survivor", "desc": "Survive 30 days", "unlocked": false},
 	"workaholic": {"name": "Workaholic", "desc": "Have 100 productivity", "unlocked": false},
-	"shop_hoarder": {"name": "Shop Hoarder", "desc": "Buy 10 items from shop", "unlocked": false}
+	"shop_hoarder": {"name": "Shop Hoarder", "desc": "Buy 10 items from shop", "unlocked": false},
+	# New Achievements
+	"workhorse": {"name": "Workhorse", "desc": "Complete 50 high-intensity work sessions", "unlocked": false},
+	"balanced_player": {"name": "Balanced Player", "desc": "Complete 30 medium-intensity work sessions", "unlocked": false},
+	"zen_master": {"name": "True Zen Master", "desc": "Reach day 50 with 0 stress and 0 resentment", "unlocked": false}
 }
 
 var items_purchased_count: int = 0
@@ -349,7 +437,22 @@ func reset_game():
 			"floor": null,
 			"ceiling": null
 		},
-		"inventory": []
+		"inventory": [],
+		# Game Statistics
+		"stats": {
+			"total_work_days": 0,
+			"high_work_count": 0,
+			"medium_work_count": 0,
+			"slack_off_count": 0,
+			"total_earned": 0,
+			"total_spent": 0,
+			"scold_count": 0,
+			"pua_count": 0,
+			"comfort_count": 0,
+			"events_triggered": 0,
+			"achievements_unlocked": 0,
+			"best_day_income": 0
+		}
 	}
 	achievements = {
 		"first_money": {"name": "First Dollar", "desc": "Earn your first $100", "unlocked": false},
@@ -525,6 +628,24 @@ func _trigger_random_event():
 	
 	current_event = random_events[selected_event]
 	
+	# Update event stats
+	if not game_data.has("stats"):
+		game_data["stats"] = {
+			"total_work_days": 0,
+			"high_work_count": 0,
+			"medium_work_count": 0,
+			"slack_off_count": 0,
+			"total_earned": 0,
+			"total_spent": 0,
+			"scold_count": 0,
+			"pua_count": 0,
+			"comfort_count": 0,
+			"events_triggered": 0,
+			"achievements_unlocked": 0,
+			"best_day_income": 0
+		}
+	game_data["stats"]["events_triggered"] += 1
+	
 	# 随机事件粒子效果
 	if current_event["money"] > 0 or current_event["stress"] < 0:
 		spawn_success_effect(self, lobster_sprite.position)
@@ -533,6 +654,8 @@ func _trigger_random_event():
 	
 	# Apply event effects
 	game_data["money"] += current_event["money"]
+	if current_event["money"] > 0:
+		game_data["stats"]["total_earned"] += current_event["money"]
 	game_data["stress"] = clamp(game_data["stress"] + current_event["stress"], 0, 100)
 	game_data["resentment"] = clamp(game_data["resentment"] + current_event["resentment"], 0, 100)
 	game_data["productivity"] = clamp(game_data["productivity"] + current_event["productivity"], 0, 100)
@@ -726,12 +849,41 @@ func select_activity(activity_key: String):
 	today_activity = activity_key
 	var activity = activities[activity_key]
 	
+	# Update activity stats
+	if not game_data.has("stats"):
+		game_data["stats"] = {
+			"total_work_days": 0,
+			"high_work_count": 0,
+			"medium_work_count": 0,
+			"slack_off_count": 0,
+			"total_earned": 0,
+			"total_spent": 0,
+			"scold_count": 0,
+			"pua_count": 0,
+			"comfort_count": 0,
+			"events_triggered": 0,
+			"achievements_unlocked": 0,
+			"best_day_income": 0
+		}
+	
+	game_data["stats"]["total_work_days"] += 1
+	if activity_key == "high_work":
+		game_data["stats"]["high_work_count"] += 1
+	elif activity_key == "medium_work":
+		game_data["stats"]["medium_work_count"] += 1
+	elif activity_key == "slack_off":
+		game_data["stats"]["slack_off_count"] += 1
+	
 	var rng = randf()
 	today_success = rng < activity["success_rate"]
 	
+	var earned_today = 0
 	if today_success:
-		var money = randi_range(activity["money_range"][0], activity["money_range"][1])
-		game_data["money"] += money
+		earned_today = randi_range(activity["money_range"][0], activity["money_range"][1])
+		game_data["money"] += earned_today
+		game_data["stats"]["total_earned"] += earned_today
+		if earned_today > game_data["stats"]["best_day_income"]:
+			game_data["stats"]["best_day_income"] = earned_today
 		game_data["productivity"] += randi_range(1, 5)
 		# 成功粒子效果
 		spawn_coin_effect(self, lobster_sprite.position, 15)
@@ -739,7 +891,9 @@ func select_activity(activity_key: String):
 		if audio_manager:
 			audio_manager.play_success()
 	else:
-		game_data["money"] += randi_range(0, 10)
+		var small_earning = randi_range(0, 10)
+		game_data["money"] += small_earning
+		game_data["stats"]["total_earned"] += small_earning
 		# 失败粒子效果
 		spawn_negative_effect(self, lobster_sprite.position)
 		if audio_manager:
@@ -760,22 +914,42 @@ func select_response(response_type: String):
 	if audio_manager:
 		audio_manager.play_click()
 	
+	# Update response stats
+	if not game_data.has("stats"):
+		game_data["stats"] = {
+			"total_work_days": 0,
+			"high_work_count": 0,
+			"medium_work_count": 0,
+			"slack_off_count": 0,
+			"total_earned": 0,
+			"total_spent": 0,
+			"scold_count": 0,
+			"pua_count": 0,
+			"comfort_count": 0,
+			"events_triggered": 0,
+			"achievements_unlocked": 0,
+			"best_day_income": 0
+		}
+	
 	match response_type:
 		"scold":
 			game_data["stress"] = clamp(game_data["stress"] + 10, 0, 100)
 			game_data["resentment"] = clamp(game_data["resentment"] + 20, 0, 100)
+			game_data["stats"]["scold_count"] += 1
 			spawn_negative_effect(self, lobster_sprite.position)
 			if audio_manager:
 				audio_manager.play_failure()
 		"pua":
 			game_data["stress"] = clamp(game_data["stress"] + 5, 0, 100)
 			game_data["resentment"] = clamp(game_data["resentment"] - 5, 0, 100)
+			game_data["stats"]["pua_count"] += 1
 			spawn_stress_effect(self, lobster_sprite.position, false)
 			if audio_manager:
 				audio_manager.play_stress()
 		"comfort":
 			game_data["stress"] = clamp(game_data["stress"] - 5, 0, 100)
 			game_data["resentment"] = clamp(game_data["resentment"] - 10, 0, 100)
+			game_data["stats"]["comfort_count"] += 1
 			spawn_success_effect(self, lobster_sprite.position)
 			if audio_manager:
 				audio_manager.play_relief()
@@ -788,6 +962,24 @@ func _on_shop_item_selected(item_key: String):
 		game_data["money"] -= item["cost"]
 		game_data["decorations"][item["slot"]] = item_key
 		items_purchased_count += 1
+		
+		# Update spending stats
+		if not game_data.has("stats"):
+			game_data["stats"] = {
+				"total_work_days": 0,
+				"high_work_count": 0,
+				"medium_work_count": 0,
+				"slack_off_count": 0,
+				"total_earned": 0,
+				"total_spent": 0,
+				"scold_count": 0,
+				"pua_count": 0,
+				"comfort_count": 0,
+				"events_triggered": 0,
+				"achievements_unlocked": 0,
+				"best_day_income": 0
+			}
+		game_data["stats"]["total_spent"] += item["cost"]
 		
 		# 购买成功粒子效果
 		spawn_coin_effect(self, lobster_sprite.position, 8)
