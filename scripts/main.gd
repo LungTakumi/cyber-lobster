@@ -101,6 +101,105 @@ var today_activity: String = ""
 var today_success: bool = false
 var today_report: String = ""
 
+# Random Events System
+var random_events = {
+	"lottery": {
+		"name": "Lottery Win!",
+		"desc": "Your lobster bought a lottery ticket and won!",
+		"money": 500,
+		"stress": 0,
+		"resentment": 0,
+		"productivity": 0,
+		"weight": 5
+	},
+	"prank": {
+		"name": "Prank Call",
+		"desc": "A prank caller stressed the lobster out.",
+		"money": 0,
+		"stress": 15,
+		"resentment": 5,
+		"productivity": -5,
+		"weight": 15
+	},
+	"bonus": {
+		"name": "Performance Bonus",
+		"desc": "The client gave a surprise bonus!",
+		"money": 200,
+		"stress": -5,
+		"resentment": -10,
+		"productivity": 5,
+		"weight": 10
+	},
+	"break_in": {
+		"name": "Break-in!",
+		"desc": "Someone stole some money!",
+		"money": -100,
+		"stress": 20,
+		"resentment": 10,
+		"productivity": 0,
+		"weight": 8
+	},
+	"meditation": {
+		"name": "Meditation Session",
+		"desc": "Your lobster found inner peace.",
+		"money": 0,
+		"stress": -20,
+		"resentment": -15,
+		"productivity": 5,
+		"weight": 12
+	},
+	"influencer": {
+		"name": "Went Viral!",
+		"desc": "Your lobster became an influencer overnight!",
+		"money": 300,
+		"stress": 10,
+		"resentment": -5,
+		"productivity": 10,
+		"weight": 5
+	},
+	"power_outage": {
+		"name": "Power Outage",
+		"desc": "Lost power, productivity dropped.",
+		"money": -50,
+		"stress": 5,
+		"resentment": 10,
+		"productivity": -10,
+		"weight": 10
+	},
+	"upgrade": {
+		"name": "Tool Upgrade",
+		"desc": "Found better tools!",
+		"money": 0,
+		"stress": -10,
+		"resentment": 0,
+		"productivity": 20,
+		"weight": 8
+	}
+}
+
+var current_event: Dictionary = {}
+var has_event_today: bool = false
+
+# Achievement System
+var achievements = {
+	"first_money": {"name": "First Dollar", "desc": "Earn your first $100", "unlocked": false},
+	"rich": {"name": "Rich Lobster", "desc": "Accumulate $1000", "unlocked": false},
+	"millionaire": {"name": "Millionaire", "desc": "Accumulate $10000", "unlocked": false},
+	"stressed": {"name": "High Stress", "desc": "Reach 90 stress", "unlocked": false},
+	"burnout": {"name": "Burnout", "desc": "Reach 100 stress", "unlocked": false},
+	"happy": {"name": "Zen Master", "desc": "Have 0 stress and 0 resentment", "unlocked": false},
+	"corporate": {"name": "Corporate Slave", "desc": "Evolve to Corporate type", "unlocked": false},
+	"chaotic": {"name": "Chaotic Evil", "desc": "Evolve to Chaotic type", "unlocked": false},
+	"lazy": {"name": "Lazy Lobster", "desc": "Evolve to Lazy type", "unlocked": false},
+	"survivor": {"name": "Survivor", "desc": "Survive 30 days", "unlocked": false},
+	"workaholic": {"name": "Workaholic", "desc": "Have 100 productivity", "unlocked": false},
+	"shop_hoarder": {"name": "Shop Hoarder", "desc": "Buy 10 items from shop", "unlocked": false}
+}
+
+var items_purchased_count: int = 0
+var event_panel_visible: bool = false
+var achievement_panel_visible: bool = false
+
 @onready var phase_label = $UI/PhaseLabel
 @onready var stats_label = $UI/StatsLabel
 @onready var lobster_sprite = $Lobster/Sprite2D
@@ -109,6 +208,10 @@ var today_report: String = ""
 @onready var choice_buttons = $UI/ChoiceButtons
 @onready var shop_panel = $UI/ShopPanel
 @onready var shop_grid = $UI/ShopPanel/ScrollContainer/ShopGrid
+@onready var event_panel = $UI/EventPanel
+@onready var event_label = $UI/EventPanel/EventLabel
+@onready var achievement_panel = $UI/AchievementPanel
+@onready var achievement_label = $UI/AchievementPanel/AchievementLabel
 
 var choice_button_refs: Array[Button] = []
 var shop_button_refs: Array[Button] = []
@@ -166,6 +269,7 @@ func start_morning():
 		{"key": "medium_work", "text": "Medium-Intensity Work ($$)\nBalanced"},
 		{"key": "slack_off", "text": "Slack Off\nRecover Stress"}
 	])
+	_check_achievements()
 
 func start_evening():
 	_hide_all_panels()
@@ -195,6 +299,11 @@ func start_sleep():
 	current_phase = Phase.NIGHT_SLEEP
 	phase_label.text = "Day %d - SLEEPING..." % game_data["day"]
 	
+	# Trigger random event before sleep (30% chance)
+	has_event_today = randf() < 0.3
+	if has_event_today:
+		_trigger_random_event()
+	
 	_calculate_daily_growth()
 	_update_evolution()
 	game_data["day"] += 1
@@ -203,9 +312,121 @@ func start_sleep():
 	await get_tree().create_timer(2.0).timeout
 	start_morning()
 
+func _trigger_random_event():
+	var event_keys = random_events.keys()
+	var total_weight = 0
+	for key in event_keys:
+		total_weight += random_events[key]["weight"]
+	
+	var random_val = randi() % total_weight
+	var running_weight = 0
+	var selected_event = ""
+	
+	for key in event_keys:
+		running_weight += random_events[key]["weight"]
+		if random_val < running_weight:
+			selected_event = key
+			break
+	
+	current_event = random_events[selected_event]
+	
+	# Apply event effects
+	game_data["money"] += current_event["money"]
+	game_data["stress"] = clamp(game_data["stress"] + current_event["stress"], 0, 100)
+	game_data["resentment"] = clamp(game_data["resentment"] + current_event["resentment"], 0, 100)
+	game_data["productivity"] = clamp(game_data["productivity"] + current_event["productivity"], 0, 100)
+	
+	# Show event panel
+	event_label.text = "🎲 RANDOM EVENT: %s\n\n%s\n\nEffects: Money $%d | Stress %+d | Resentment %+d | Productivity %+d" % [
+		current_event["name"],
+		current_event["desc"],
+		current_event["money"],
+		current_event["stress"],
+		current_event["resentment"],
+		current_event["productivity"]
+	]
+	event_panel.visible = true
+	event_panel_visible = true
+	
+	# Auto-hide after 3 seconds
+	await get_tree().create_timer(3.0).timeout
+	event_panel.visible = false
+	event_panel_visible = false
+
+func _check_achievements():
+	var unlocked_count = 0
+	var new_achievements = []
+	
+	# Check each achievement
+	if game_data["money"] >= 100 and not achievements["first_money"]["unlocked"]:
+		achievements["first_money"]["unlocked"] = true
+		new_achievements.append("first_money")
+	
+	if game_data["money"] >= 1000 and not achievements["rich"]["unlocked"]:
+		achievements["rich"]["unlocked"] = true
+		new_achievements.append("rich")
+	
+	if game_data["money"] >= 10000 and not achievements["millionaire"]["unlocked"]:
+		achievements["millionaire"]["unlocked"] = true
+		new_achievements.append("millionaire")
+	
+	if game_data["stress"] >= 90 and not achievements["stressed"]["unlocked"]:
+		achievements["stressed"]["unlocked"] = true
+		new_achievements.append("stressed")
+	
+	if game_data["stress"] >= 100 and not achievements["burnout"]["unlocked"]:
+		achievements["burnout"]["unlocked"] = true
+		new_achievements.append("burnout")
+	
+	if game_data["stress"] == 0 and game_data["resentment"] == 0 and not achievements["happy"]["unlocked"]:
+		achievements["happy"]["unlocked"] = true
+		new_achievements.append("happy")
+	
+	if game_data["evolution_type"] == "corporate" and not achievements["corporate"]["unlocked"]:
+		achievements["corporate"]["unlocked"] = true
+		new_achievements.append("corporate")
+	
+	if game_data["evolution_type"] == "chaotic" and not achievements["chaotic"]["unlocked"]:
+		achievements["chaotic"]["unlocked"] = true
+		new_achievements.append("chaotic")
+	
+	if game_data["evolution_type"] == "lazy" and not achievements["lazy"]["unlocked"]:
+		achievements["lazy"]["unlocked"] = true
+		new_achievements.append("lazy")
+	
+	if game_data["day"] >= 30 and not achievements["survivor"]["unlocked"]:
+		achievements["survivor"]["unlocked"] = true
+		new_achievements.append("survivor")
+	
+	if game_data["productivity"] >= 100 and not achievements["workaholic"]["unlocked"]:
+		achievements["workaholic"]["unlocked"] = true
+		new_achievements.append("workaholic")
+	
+	if items_purchased_count >= 10 and not achievements["shop_hoarder"]["unlocked"]:
+		achievements["shop_hoarder"]["unlocked"] = true
+		new_achievements.append("shop_hoarder")
+	
+	# Show achievement notification
+	if new_achievements.size() > 0:
+		var achievement_text = "🏆 ACHIEVEMENT UNLOCKED!\n\n"
+		for key in new_achievements:
+			achievement_text += "• %s: %s\n" % [achievements[key]["name"], achievements[key]["desc"]]
+		
+		achievement_label.text = achievement_text
+		achievement_panel.visible = true
+		achievement_panel_visible = true
+		
+		await get_tree().create_timer(3.0).timeout
+		achievement_panel.visible = false
+		achievement_panel_visible = false
+
 func _hide_all_panels():
 	dialogue_box.visible = false
 	shop_panel.visible = false
+	event_panel.visible = false
+	achievement_panel.visible = false
+	event_panel_visible = false
+	achievement_panel_visible = false
 	for btn in choice_button_refs:
 		if is_instance_valid(btn):
 			btn.queue_free()
@@ -309,6 +530,7 @@ func _on_shop_item_selected(item_key: String):
 	if game_data["money"] >= item["cost"]:
 		game_data["money"] -= item["cost"]
 		game_data["decorations"][item["slot"]] = item_key
+		items_purchased_count += 1
 		
 		if item.has("stress_mod"):
 			game_data["stress"] = clamp(game_data["stress"] + item["stress_mod"], 0, 100)
@@ -397,11 +619,18 @@ func _calculate_daily_growth():
 	game_data["resentment"] = clamp(game_data["resentment"] - 3, 0, 100)
 
 func _update_ui():
+	# Count unlocked achievements
+	var unlocked_count = 0
+	for key in achievements:
+		if achievements[key]["unlocked"]:
+			unlocked_count += 1
+	
 	phase_label.text = "Day %d - %s" % [game_data["day"], Phase.keys()[current_phase]]
-	stats_label.text = "Money: $%d | Stress: %d | Resentment: %d | Productivity: %d\nEvolution: %s" % [
+	stats_label.text = "Money: $%d | Stress: %d | Resentment: %d | Productivity: %d\nEvolution: %s | Achievements: %d/12" % [
 		game_data["money"], 
 		game_data["stress"], 
 		game_data["resentment"],
 		game_data["productivity"],
-		game_data["evolution_type"].to_upper()
+		game_data["evolution_type"].to_upper(),
+		unlocked_count
 	]
