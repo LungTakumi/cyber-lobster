@@ -101,6 +101,23 @@ var activities = {
 		"stress": -10,
 		"resentment": -5,
 		"success_rate": 1.0
+	},
+	# Combat activities
+	"combat": {
+		"name": "Combat Mode",
+		"desc": "Fight enemies",
+		"money_range": [50, 50],
+		"stress": 5,
+		"resentment": 0,
+		"success_rate": 1.0
+	},
+	"boss": {
+		"name": "Boss Battle",
+		"desc": "Fight the Slime King",
+		"money_range": [500, 500],
+		"stress": 20,
+		"resentment": 0,
+		"success_rate": 1.0
 	}
 }
 
@@ -212,6 +229,35 @@ var shop_items = {
 		"productivity_mod": 5,
 		"resentment_mod": -15,
 		"desc": "-25 Stress, +5 Productivity, -15 Resentment"
+	},
+	# Combat Skills
+	"dash_boots": {
+		"name": "⚡ Dash Boots",
+		"cost": 800,
+		"slot": "skill",
+		"skill": "dash",
+		"desc": "Unlock Dash skill in combat!"
+	},
+	"hammer_training": {
+		"name": "🔨 Hammer Training",
+		"cost": 1000,
+		"slot": "skill",
+		"skill": "ground_slam",
+		"desc": "Unlock Ground Slam skill!"
+	},
+	"magic_wand": {
+		"name": "✨ Magic Wand",
+		"cost": 1200,
+		"slot": "skill",
+		"skill": "magic_shot",
+		"desc": "Unlock Magic Shot skill!"
+	},
+	"healingherb": {
+		"name": "💚 Healing Herb",
+		"cost": 600,
+		"slot": "skill",
+		"skill": "heal",
+		"desc": "Unlock Heal skill in combat!"
 	}
 }
 
@@ -382,6 +428,78 @@ var combo_multiplier: float = 1.0
 var combo_timer: float = 0.0
 var click_rewards_earned: int = 0
 
+# ========== NEW: COMBAT SYSTEM ==========
+var combat_mode: bool = false
+var current_enemy: Node = null
+var enemies: Array = []
+var boss_active: bool = false
+var boss_health: int = 100
+var boss_max_health: int = 100
+var player_health: int = 100
+var player_max_health: int = 100
+var combat_cooldown: float = 0.0
+var attack_range: float = 100.0
+
+# Combat enemies data
+var combat_enemies = {
+	"slime": {
+		"name": "Green Slime",
+		"health": 30,
+		"damage": 10,
+		"speed": 50,
+		"reward": 20,
+		"color": Color(0.2, 0.8, 0.2)
+	},
+	"bat": {
+		"name": "Night Bat",
+		"health": 20,
+		"damage": 15,
+		"speed": 100,
+		"reward": 30,
+		"color": Color(0.4, 0.2, 0.6)
+	},
+	"skeleton": {
+		"name": "Skeleton Warrior",
+		"health": 50,
+		"damage": 20,
+		"speed": 40,
+		"reward": 50,
+		"color": Color(0.9, 0.9, 0.85)
+	}
+}
+
+# Boss data
+var bosses = {
+	"boss_slime_king": {
+		"name": "SLIME KING",
+		"health": 200,
+		"damage": 25,
+		"speed": 30,
+		"reward": 500,
+		"color": Color(0.1, 0.6, 0.1),
+		"description": "The giant slime ruler!"
+	}
+}
+
+var unlocked_skills = {
+	"double_jump": false,
+	"dash": false,
+	"ground_slam": false,
+	"magic_shot": false,
+	"heal": false
+}
+
+var skill_cooldowns = {
+	"dash": 0.0,
+	"ground_slam": 0.0,
+	"magic_shot": 0.0,
+	"heal": 0.0
+}
+
+# Combat UI
+@onready var combat_hud = null
+@onready var enemy_sprites = []
+
 @onready var phase_label = $UI/PhaseLabel
 @onready var stats_label = $UI/StatsLabel
 @onready var lobster_sprite = $Lobster/Sprite2D
@@ -420,6 +538,7 @@ func _ready():
 	_create_lobster_sprite()
 	_create_background_effects()
 	_setup_lobster_interaction()
+	_create_combat_ui()
 	_show_main_menu()
 
 func _setup_lobster_interaction():
@@ -497,6 +616,502 @@ func _on_lobster_clicked():
 	
 	# 更新UI
 	_update_ui()
+
+# ========== NEW COMBAT SYSTEM FUNCTIONS ==========
+func _create_combat_hud():
+	var combat_ui = CanvasLayer.new()
+	combat_ui.name = "CombatHUD"
+	$UI.add_child(combat_ui)
+	
+	# Player HP bar
+	var player_hp = ProgressBar.new()
+	player_hp.name = "PlayerHP"
+	player_hp.custom_minimum_size = Vector2(200, 20)
+	player_hp.position = Vector2(20, 80)
+	player_hp.max_value = player_max_health
+	player_hp.value = player_health
+	player_hp.show_percentage = false
+	combat_ui.add_child(player_hp)
+	
+	# Player HP label
+	var hp_label = Label.new()
+	hp_label.name = "HPLabel"
+	hp_label.position = Vector2(20, 60)
+	hp_label.text = "🦞 HP: %d/%d" % [player_health, player_max_health]
+	combat_ui.add_child(hp_label)
+	
+	# Boss health bar (hidden by default)
+	var boss_hp = ProgressBar.new()
+	boss_hp.name = "BossHP"
+	boss_hp.custom_minimum_size = Vector2(400, 30)
+	boss_hp.position = Vector2(440, 60)
+	boss_hp.max_value = boss_max_health
+	boss_hp.value = boss_health
+	boss_hp.visible = false
+	combat_ui.add_child(boss_hp)
+	
+	# Boss name label
+	var boss_label = Label.new()
+	boss_label.name = "BossLabel"
+	boss_label.position = Vector2(440, 35)
+	boss_label.text = ""
+	boss_label.visible = false
+	combat_ui.add_child(boss_label)
+	
+	# Attack button
+	var attack_btn = Button.new()
+	attack_btn.name = "AttackBtn"
+	attack_btn.text = "⚔️ ATTACK"
+	attack_btn.custom_minimum_size = Vector2(150, 50)
+	attack_btn.position = Vector2(565, 600)
+	attack_btn.pressed.connect(_on_attack_pressed)
+	combat_ui.add_child(attack_btn)
+	
+	# Skill buttons
+	var skills = ["dash", "ground_slam", "magic_shot", "heal"]
+	var skill_x = 20
+	for skill in skills:
+		var btn = Button.new()
+		btn.name = "Skill_" + skill
+		btn.text = _get_skill_icon(skill) + " " + skill.to_upper()
+		btn.custom_minimum_size = Vector2(120, 40)
+		btn.position = Vector2(skill_x, 600)
+		btn.pressed.connect(_on_skill_pressed.bind(skill))
+		if not unlocked_skills.get(skill, false):
+			btn.disabled = true
+			btn.text = "🔒 " + skill.to_upper()
+		combat_ui.add_child(btn)
+		skill_x += 130
+	
+	# Combat menu button
+	var combat_menu_btn = Button.new()
+	combat_menu_btn.name = "CombatMenuBtn"
+	combat_menu_btn.text = "📋 Menu"
+	combat_menu_btn.custom_minimum_size = Vector2(100, 40)
+	combat_menu_btn.position = Vector2(1150, 20)
+	combat_menu_btn.pressed.connect(_on_combat_menu_pressed)
+	combat_ui.add_child(combat_menu_btn)
+	
+	combat_hud = combat_ui
+
+func _get_skill_icon(skill: String) -> String:
+	match skill:
+		"dash": return "💨"
+		"ground_slam": return "🔨"
+		"magic_shot": return "✨"
+		"heal": return "💚"
+	return "❓"
+
+func start_combat():
+	combat_mode = true
+	player_health = 100
+	player_max_health = 100
+	enemy_sprites.clear()
+	
+	# Create enemies
+	_spawn_enemies()
+	
+	# Create combat UI
+	_create_combat_hud()
+	_hide_all_panels()
+	main_menu.visible = false
+	
+	# Update game phase
+	current_phase = Phase.MORNING_SCHEDULE
+	_update_combat_ui()
+
+func _spawn_enemies():
+	enemies.clear()
+	var num_enemies = randi_range(2, 4)
+	var enemy_types = combat_enemies.keys()
+	
+	for i in range(num_enemies):
+		var enemy_type = enemy_types.pick_random()
+		var enemy_data = combat_enemies[enemy_type].duplicate()
+		enemy_data["type"] = enemy_type
+		enemy_data["health"] = enemy_data["health"]
+		enemy_data["max_health"] = enemy_data["health"]
+		enemy_data["position"] = Vector2(100 + i * 300, 500)
+		enemies.append(enemy_data)
+		
+		# Create visual sprite
+		_create_enemy_sprite(enemy_data)
+
+func _create_enemy_sprite(enemy_data: Dictionary):
+	var enemy_node = Node2D.new()
+	enemy_node.name = "Enemy_" + enemy_data["type"]
+	enemy_node.position = enemy_data["position"]
+	
+	var body = ColorRect.new()
+	body.size = Vector2(40, 40)
+	body.color = enemy_data["color"]
+	enemy_node.add_child(body)
+	
+	var eyes = ColorRect.new()
+	eyes.size = Vector2(10, 5)
+	eyes.color = Color.RED
+	eyes.position = Vector2(15, 10)
+	enemy_node.add_child(eyes)
+	
+	add_child(enemy_node)
+	enemy_sprites.append(enemy_node)
+
+func start_boss_battle():
+	boss_active = true
+	combat_mode = true
+	player_health = 100
+	player_max_health = 150
+	enemy_sprites.clear()
+	
+	# Get boss data
+	var boss_data = bosses["boss_slime_king"].duplicate()
+	boss_health = boss_data["health"]
+	boss_max_health = boss_data["health"]
+	
+	# Create boss sprite
+	_create_boss_sprite(boss_data)
+	
+	# Create combat UI
+	_create_combat_hud()
+	_hide_all_panels()
+	main_menu.visible = false
+	
+	current_phase = Phase.MORNING_SCHEDULE
+	_update_combat_ui()
+	_show_boss_intro()
+
+func _create_boss_sprite(boss_data: Dictionary):
+	var boss_node = Node2D.new()
+	boss_node.name = "Boss"
+	boss_node.position = Vector2(900, 450)
+	
+	# Big body
+	var body = ColorRect.new()
+	body.size = Vector2(120, 120)
+	body.color = boss_data["color"]
+	boss_node.add_child(body)
+	
+	# Crown
+	var crown = ColorRect.new()
+	crown.size = Vector2(80, 30)
+	crown.color = Color(1, 0.84, 0)
+	crown.position = Vector2(20, -25)
+	boss_node.add_child(crown)
+	
+	# Angry eyes
+	var eye1 = ColorRect.new()
+	eye1.size = Vector2(20, 20)
+	eye1.color = Color.RED
+	eye1.position = Vector2(25, 30)
+	boss_node.add_child(eye1)
+	
+	var eye2 = ColorRect.new()
+	eye2.size = Vector2(20, 20)
+	eye2.color = Color.RED
+	eye2.position = Vector2(75, 30)
+	boss_node.add_child(eye2)
+	
+	# Mouth
+	var mouth = ColorRect.new()
+	mouth.size = Vector2(60, 10)
+	mouth.color = Color.BLACK
+	mouth.position = Vector2(30, 80)
+	boss_node.add_child(mouth)
+	
+	add_child(boss_node)
+	enemy_sprites.append(boss_node)
+
+func _show_boss_intro():
+	var intro = Label.new()
+	intro.text = "⚠️ BOSS BATTLE: SLIME KING ⚠️\n\nDefeat the boss to earn $500!"
+	intro.position = Vector2(340, 250)
+	intro.modulate = Color(1, 0.2, 0.2)
+	add_child(intro)
+	
+	var tween = create_tween()
+	tween.tween_property(intro, "modulate:a", 0.0, 4.0)
+	tween.tween_callback(intro.queue_free)
+	
+	if audio_manager:
+		audio_manager.play_event()
+
+func _update_combat_ui():
+	if combat_hud and combat_hud.has_node("PlayerHP"):
+		combat_hud.get_node("PlayerHP").value = player_health
+		combat_hud.get_node("PlayerHP").max_value = player_max_health
+	
+	if combat_hud and combat_hud.has_node("HPLabel"):
+		combat_hud.get_node("HPLabel").text = "🦞 HP: %d/%d" % [player_health, player_max_health]
+	
+	if boss_active and combat_hud:
+		if combat_hud.has_node("BossHP"):
+			combat_hud.get_node("BossHP").visible = true
+			combat_hud.get_node("BossHP").value = boss_health
+		if combat_hud.has_node("BossLabel"):
+			combat_hud.get_node("BossLabel").visible = true
+			combat_hud.get_node("BossLabel").text = "👹 SLIME KING - HP: %d/%d" % [boss_health, boss_max_health]
+	
+	phase_label.text = "⚔️ COMBAT MODE" if not boss_active else "👹 BOSS BATTLE"
+	stats_label.text = "Combat! Click ATTACK to fight! | Money: $%d" % game_data["money"]
+
+func _on_attack_pressed():
+	if combat_cooldown > 0:
+		return
+	
+	combat_cooldown = 0.3
+	
+	# Attack animation
+	_animate_attack()
+	
+	if boss_active:
+		var damage = randi_range(10, 20)
+		boss_health -= damage
+		spawn_negative_effect(self, Vector2(900, 450))
+		
+		if audio_manager:
+			audio_manager.play_success()
+		
+		if boss_health <= 0:
+			_victory_boss()
+			return
+	else:
+		_attack_enemies()
+	
+	_enemy_attack()
+	_update_combat_ui()
+
+func _animate_attack():
+	var tween = create_tween()
+	tween.tween_property(lobster_container, "position:x", lobster_container.position.x + 30, 0.1)
+	tween.tween_property(lobster_container, "position:x", lobster_container.position.x, 0.1)
+
+func _attack_enemies():
+	var damage = randi_range(15, 25)
+	
+	for i in range(enemies.size() - 1, -1, -1):
+		var enemy = enemies[i]
+		enemy["health"] -= damage
+		spawn_stress_effect(self, enemy["position"], true)
+		
+		if enemy["health"] <= 0:
+			var reward = enemy["reward"]
+			game_data["money"] += reward
+			game_data["stats"]["total_earned"] += reward
+			
+			if i < enemy_sprites.size():
+				enemy_sprites[i].queue_free()
+				enemy_sprites.remove_at(i)
+			
+			enemies.remove_at(i)
+			spawn_success_effect(self, enemy["position"])
+			spawn_coin_effect(self, enemy["position"], 10)
+	
+	if enemies.size() == 0:
+		_victory_combat()
+
+func _enemy_attack():
+	if boss_active:
+		var damage = randi_range(10, 20)
+		player_health -= damage
+		spawn_negative_effect(self, lobster_container.position)
+	else:
+		for enemy in enemies:
+			var damage = enemy["damage"]
+			player_health -= damage
+			spawn_negative_effect(self, lobster_container.position)
+	
+	player_health = max(0, player_health)
+	
+	if player_health <= 0:
+		_defeat_combat()
+
+func _victory_combat():
+	combat_mode = false
+	_clear_combat_ui()
+	
+	var victory = Label.new()
+	victory.text = "🎉 VICTORY!\n\nAll enemies defeated!\n\n+$50"
+	victory.position = Vector2(490, 280)
+	victory.modulate = Color(0.3, 1, 0.3)
+	add_child(victory)
+	
+	game_data["money"] += 50
+	game_data["stats"]["total_earned"] += 50
+	
+	if audio_manager:
+		audio_manager.play_success()
+	
+	await get_tree().create_timer(2.0).timeout
+	victory.queue_free()
+	start_shop()
+
+func _victory_boss():
+	boss_active = false
+	combat_mode = false
+	_clear_combat_ui()
+	
+	var reward = 500
+	game_data["money"] += reward
+	game_data["stats"]["total_earned"] += reward
+	
+	spawn_star_effect(self, Vector2(900, 450))
+	spawn_coin_effect(self, Vector2(900, 450), 30)
+	spawn_success_effect(self, Vector2(900, 450))
+	
+	if audio_manager:
+		audio_manager.play_success()
+		audio_manager.play_achievement()
+	
+	var victory = Label.new()
+	victory.text = "👑 BOSS DEFEATED! 👑\n\nThe Slime King has fallen!\n\n+$500!"
+	victory.position = Vector2(390, 250)
+	victory.modulate = Color(1, 0.84, 0)
+	add_child(victory)
+	
+	await get_tree().create_timer(3.0).timeout
+	victory.queue_free()
+	
+	if not achievements.has("boss_slayer"):
+		achievements["boss_slayer"] = {"name": "Boss Slayer", "desc": "Defeat the Slime King", "unlocked": true}
+	
+	start_shop()
+
+func _defeat_combat():
+	combat_mode = false
+	_clear_combat_ui()
+	
+	var defeat = Label.new()
+	defeat.text = "💀 DEFEATED...\n\nYour lobster fainted!\n\n-$20 medical bill"
+	defeat.position = Vector2(500, 280)
+	defeat.modulate = Color(1, 0.2, 0.2)
+	add_child(defeat)
+	
+	game_data["money"] = max(0, game_data["money"] - 20)
+	
+	if audio_manager:
+		audio_manager.play_failure()
+	
+	await get_tree().create_timer(2.0).timeout
+	defeat.queue_free()
+	start_morning()
+
+func _clear_combat_ui():
+	for sprite in enemy_sprites:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	enemy_sprites.clear()
+	
+	if combat_hud:
+		combat_hud.queue_free()
+		combat_hud = null
+
+func _on_skill_pressed(skill: String):
+	if skill_cooldowns[skill] > 0:
+		_show_notification("⏳ Skill on cooldown!")
+		return
+	
+	match skill:
+		"dash": _perform_dash()
+		"ground_slam": _perform_ground_slam()
+		"magic_shot": _perform_magic_shot()
+		"heal": _perform_heal()
+
+func _perform_dash():
+	skill_cooldowns["dash"] = 5.0
+	
+	var tween = create_tween()
+	var target_pos = lobster_container.position + Vector2(200, 0)
+	tween.tween_property(lobster_container, "position", target_pos, 0.2)
+	
+	for enemy in enemies:
+		enemy["health"] -= 25
+		spawn_stress_effect(self, enemy["position"], true)
+	
+	if boss_active:
+		boss_health -= 30
+		spawn_negative_effect(self, Vector2(900, 450))
+		if boss_health <= 0:
+			_victory_boss()
+	
+	_update_combat_ui()
+
+func _perform_ground_slam():
+	skill_cooldowns["ground_slam"] = 8.0
+	
+	var tween = create_tween()
+	tween.tween_property(lobster_container, "position:y", lobster_container.position.y - 100, 0.2)
+	tween.tween_property(lobster_container, "position:y", lobster_container.position.y + 100, 0.2)
+	
+	for enemy in enemies:
+		enemy["health"] -= 40
+		spawn_stress_effect(self, enemy["position"], true)
+	
+	if boss_active:
+		boss_health -= 50
+		spawn_negative_effect(self, Vector2(900, 450))
+		if boss_health <= 0:
+			_victory_boss()
+	
+	_update_combat_ui()
+
+func _perform_magic_shot():
+	skill_cooldowns["magic_shot"] = 4.0
+	
+	var projectile = ColorRect.new()
+	projectile.size = Vector2(20, 20)
+	projectile.modulate = Color(0.5, 0.5, 1)
+	projectile.position = lobster_container.position
+	add_child(projectile)
+	
+	var tween = create_tween()
+	tween.tween_property(projectile, "position:x", 900, 0.3)
+	tween.tween_callback(projectile.queue_free)
+	
+	if boss_active:
+		boss_health -= 35
+		spawn_stress_effect(self, Vector2(900, 450), true)
+		if boss_health <= 0:
+			_victory_boss()
+	else:
+		for enemy in enemies:
+			enemy["health"] -= 35
+			spawn_stress_effect(self, enemy["position"], true)
+	
+	_update_combat_ui()
+
+func _perform_heal():
+	skill_cooldowns["heal"] = 10.0
+	
+	player_health = min(player_max_health, player_health + 50)
+	spawn_halo_effect(self, lobster_container.position, Color(0.3, 1, 0.3))
+	_update_combat_ui()
+
+func _on_combat_menu_pressed():
+	combat_mode = false
+	_clear_combat_ui()
+	_show_main_menu()
+
+func _process_combat(delta):
+	for skill in skill_cooldowns:
+		if skill_cooldowns[skill] > 0:
+			skill_cooldowns[skill] -= delta
+	
+	if combat_cooldown > 0:
+		combat_cooldown -= delta
+
+func _process(delta):
+	# 更新连击计时器
+	if combo_timer > 0:
+		combo_timer -= delta
+		if combo_timer <= 0:
+			combo_multiplier = 1.0
+			click_count = 0
+
+	# Process combat
+	if combat_mode:
+		_process_combat(delta)
+
+# ========== END COMBAT SYSTEM ==========
 
 func _show_click_feedback(reward: int, combo: int):
 	var feedback = Label.new()
@@ -742,6 +1357,7 @@ func _on_menu_pressed():
 
 func start_morning():
 	_hide_all_panels()
+	_clear_combat_ui()
 	main_menu.visible = false
 	current_phase = Phase.MORNING_SCHEDULE
 	_update_ui()
@@ -754,11 +1370,21 @@ func start_morning():
 	# 显示点击提示
 	_show_click_hint()
 	
-	_create_choice_buttons([
+	# Build choices - add combat options after day 3
+	var choices = [
 		{"key": "high_work", "text": "High-Intensity Work ($$$)\nHigh Stress, High Reward"},
 		{"key": "medium_work", "text": "Medium-Intensity Work ($$)\nBalanced"},
 		{"key": "slack_off", "text": "Slack Off\nRecover Stress"}
-	], true)
+	]
+	
+	# Add combat options for higher days
+	if game_data["day"] >= 3:
+		choices.append({"key": "combat", "text": "⚔️ COMBAT\nFight Enemies (+$50)"})
+	
+	if game_data["day"] >= 5:
+		choices.append({"key": "boss", "text": "👹 BOSS BATTLE\nFight Slime King (+$500)"})
+	
+	_create_choice_buttons(choices, true)
 	_check_achievements()
 
 func _show_click_hint():
@@ -1139,6 +1765,14 @@ func select_activity(activity_key: String):
 	elif activity["stress"] < 0 and audio_manager:
 		audio_manager.play_relief()
 	
+	# Handle combat modes
+	if activity_key == "combat":
+		start_combat()
+		return
+	elif activity_key == "boss":
+		start_boss_battle()
+		return
+	
 	start_evening()
 
 func select_response(response_type: String):
@@ -1191,7 +1825,25 @@ func _on_shop_item_selected(item_key: String):
 	var item = shop_items[item_key]
 	if game_data["money"] >= item["cost"]:
 		game_data["money"] -= item["cost"]
-		game_data["decorations"][item["slot"]] = item_key
+		
+		# Check if this is a skill item
+		if item.has("slot") and item["slot"] == "skill":
+			var skill_name = item["skill"]
+			if not unlocked_skills.has(skill_name):
+				unlocked_skills[skill_name] = true
+			
+			# Skill unlock effect
+			spawn_star_effect(self, lobster_sprite.position)
+			spawn_success_effect(self, lobster_sprite.position)
+			
+			if audio_manager:
+				audio_manager.play_achievement()
+			
+			_show_notification("✅ Unlocked: " + item["name"])
+		else:
+			# Regular decoration item
+			game_data["decorations"][item["slot"]] = item_key
+		
 		items_purchased_count += 1
 		
 		# Update spending stats

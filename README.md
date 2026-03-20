@@ -53,7 +53,12 @@ cyber-lobster/
 - [x] Project structure created
 - [x] Core game logic (4 phases)
 - [x] Stats & evolution system
+- [x] Combat system with enemies
+- [x] Boss battle (Slime King)
+- [x] Skill system (Dash, Ground Slam, Magic Shot, Heal)
+- [x] Clicker mini-game
+- [x] Particle effects & audio
 - [ ] Complete UI implementation
 - [ ] LLM integration (Minimax API)
 - [ ] Sprite art for evolution types
-- [ ] Build & publish
+- [x] Build & publish (v1.4.0)
