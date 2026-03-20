@@ -1,5 +1,10 @@
 extends Node
 
+# Save System
+var save_file_path = "user://save_game.json"
+var has_save_game: bool = false
+var is_in_menu: bool = true
+
 var game_data = {
 	"day": 1,
 	"money": 50,
@@ -216,11 +221,131 @@ var achievement_panel_visible: bool = false
 var choice_button_refs: Array[Button] = []
 var shop_button_refs: Array[Button] = []
 
+# Menu references
+@onready var main_menu = $UI/MainMenu
+@onready var menu_title = $UI/MainMenu/MenuTitle
+@onready var continue_btn = $UI/MainMenu/ContinueBtn
+@onready var new_game_btn = $UI/MainMenu/NewGameBtn
+
 func _ready():
 	randomize()
-	_update_ui()
+	# Check if save exists
+	has_save_game = _check_save_exists()
 	_create_lobster_sprite()
-	start_morning()
+	_show_main_menu()
+
+func _check_save_exists() -> bool:
+	var file = FileAccess.file_exists(save_file_path)
+	return file
+
+func _show_main_menu():
+	is_in_menu = true
+	_hide_all_panels()
+	main_menu.visible = true
+	
+	# Update continue button state
+	continue_btn.disabled = not has_save_game
+	if has_save_game:
+		continue_btn.text = "Continue Game"
+	else:
+		continue_btn.text = "No Save Found"
+
+func _create_main_menu_buttons():
+	# Main menu is already in the scene, just update its state
+	pass
+
+# Save/Load Functions
+func save_game() -> bool:
+	var save_data = {
+		"game_data": game_data,
+		"achievements": achievements,
+		"items_purchased_count": items_purchased_count,
+		"current_phase": current_phase,
+		"version": "1.1.0"
+	}
+	
+	var json_string = JSON.stringify(save_data)
+	var file = FileAccess.open(save_file_path, FileAccess.WRITE)
+	if file:
+		file.store_string(json_string)
+		file.close()
+		_show_notification("💾 Game Saved!")
+		return true
+	else:
+		_show_notification("❌ Save Failed!")
+		return false
+
+func load_game() -> bool:
+	if not _check_save_exists():
+		return false
+	
+	var file = FileAccess.open(save_file_path, FileAccess.READ)
+	if file:
+		var json_string = file.get_as_string()
+		file.close()
+		
+		var json = JSON.new()
+		var parse_result = json.parse(json_string)
+		
+		if parse_result == OK:
+			var save_data = json.get_data()
+			game_data = save_data.get("game_data", game_data)
+			achievements = save_data.get("achievements", achievements)
+			items_purchased_count = save_data.get("items_purchased_count", 0)
+			current_phase = save_data.get("current_phase", Phase.MORNING_SCHEDULE)
+			_update_lobster_appearance()
+			_update_ui()
+			return true
+	
+	return false
+
+func _show_notification(text: String):
+	# Show a brief notification
+	var notif_label = Label.new()
+	notif_label.text = text
+	notif_label.position = Vector2(540, 650)
+	notif_label.modulate = Color(1, 1, 0.3)
+	add_child(notif_label)
+	
+	# Fade out animation
+	var tween = create_tween()
+	tween.tween_property(notif_label, "position:y", 600, 1.5)
+	tween.parallel().tween_property(notif_label, "modulate:a", 0.0, 1.5)
+	tween.tween_callback(notif_label.queue_free)
+
+func reset_game():
+	game_data = {
+		"day": 1,
+		"money": 50,
+		"stress": 20,
+		"resentment": 10,
+		"productivity": 10,
+		"evolution_type": "normal",
+		"decorations": {
+			"desk": null,
+			"wall": null,
+			"floor": null,
+			"ceiling": null
+		},
+		"inventory": []
+	}
+	achievements = {
+		"first_money": {"name": "First Dollar", "desc": "Earn your first $100", "unlocked": false},
+		"rich": {"name": "Rich Lobster", "desc": "Accumulate $1000", "unlocked": false},
+		"millionaire": {"name": "Millionaire", "desc": "Accumulate $10000", "unlocked": false},
+		"stressed": {"name": "High Stress", "desc": "Reach 90 stress", "unlocked": false},
+		"burnout": {"name": "Burnout", "desc": "Reach 100 stress", "unlocked": false},
+		"happy": {"name": "Zen Master", "desc": "Have 0 stress and 0 resentment", "unlocked": false},
+		"corporate": {"name": "Corporate Slave", "desc": "Evolve to Corporate type", "unlocked": false},
+		"chaotic": {"name": "Chaotic Evil", "desc": "Evolve to Chaotic type", "unlocked": false},
+		"lazy": {"name": "Lazy Lobster", "desc": "Evolve to Lazy type", "unlocked": false},
+		"survivor": {"name": "Survivor", "desc": "Survive 30 days", "unlocked": false},
+		"workaholic": {"name": "Workaholic", "desc": "Have 100 productivity", "unlocked": false},
+		"shop_hoarder": {"name": "Shop Hoarder", "desc": "Buy 10 items from shop", "unlocked": false}
+	}
+	items_purchased_count = 0
+	_update_lobster_appearance()
+	_update_ui()
 
 func _create_lobster_sprite():
 	var color_rect = ColorRect.new()
@@ -260,15 +385,41 @@ func _create_lobster_sprite():
 	
 	_update_lobster_appearance()
 
+func start_new_game():
+	reset_game()
+	main_menu.visible = false
+	is_in_menu = false
+	start_morning()
+
+func continue_game():
+	if load_game():
+		main_menu.visible = false
+		is_in_menu = false
+		start_morning()
+	else:
+		_show_notification("❌ Failed to load save!")
+
+func _on_continue_pressed():
+	continue_game()
+
+func _on_new_game_pressed():
+	start_new_game()
+
+func _on_menu_pressed():
+	# Auto-save before returning to menu
+	save_game()
+	_show_main_menu()
+
 func start_morning():
 	_hide_all_panels()
+	main_menu.visible = false
 	current_phase = Phase.MORNING_SCHEDULE
 	_update_ui()
 	_create_choice_buttons([
 		{"key": "high_work", "text": "High-Intensity Work ($$$)\nHigh Stress, High Reward"},
 		{"key": "medium_work", "text": "Medium-Intensity Work ($$)\nBalanced"},
 		{"key": "slack_off", "text": "Slack Off\nRecover Stress"}
-	])
+	], true)
 	_check_achievements()
 
 func start_evening():
@@ -436,7 +587,7 @@ func _hide_all_panels():
 			btn.queue_free()
 	shop_button_refs.clear()
 
-func _create_choice_buttons(choices: Array):
+func _create_choice_buttons(choices: Array, show_menu_buttons: bool = false):
 	var y_offset = 0
 	for i in range(choices.size()):
 		var btn = Button.new()
@@ -447,6 +598,24 @@ func _create_choice_buttons(choices: Array):
 		choice_button_refs.append(btn)
 		btn.position = Vector2(0, i * 70)
 	choice_buttons.visible = true
+	
+	# Add menu and save buttons at the bottom
+	if show_menu_buttons:
+		var menu_btn = Button.new()
+		menu_btn.text = "📋 Menu (Auto-Save)"
+		menu_btn.custom_minimum_size = Vector2(180, 40)
+		menu_btn.pressed.connect(_on_menu_pressed)
+		menu_btn.position = Vector2(310, 0)
+		choice_buttons.add_child(menu_btn)
+		choice_button_refs.append(menu_btn)
+		
+		var save_btn = Button.new()
+		save_btn.text = "💾 Save Game"
+		save_btn.custom_minimum_size = Vector2(140, 40)
+		save_btn.pressed.connect(save_game)
+		save_btn.position = Vector2(500, 0)
+		choice_buttons.add_child(save_btn)
+		choice_button_refs.append(save_btn)
 
 func _create_shop_buttons():
 	var items = shop_items.keys()
