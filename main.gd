@@ -1457,6 +1457,50 @@ var levels = [
 			{"x": 1050, "y": 280, "min_x": 1000, "max_x": 1100, "type": "orb"}
 		],
 		"goal": {"x": 1400, "y": 270}
+	},
+	# NEW! Ancient Temple - Puzzle level with pressure plates and runes (v7.0)
+	{
+		"name": "Ancient Temple",
+		"bg_color": Color(0.12, 0.1, 0.08),
+		"platforms": [
+			{"x": 50, "y": 550, "w": 180, "h": 40},      # Starting platform
+			{"x": 300, "y": 480, "w": 120, "h": 25},     # Step 1
+			{"x": 480, "y": 400, "w": 80, "h": 25},      # Middle
+			{"x": 650, "y": 320, "w": 100, "h": 25},     # Upper
+			{"x": 850, "y": 250, "w": 80, "h": 25},      # High
+			{"x": 1050, "y": 320, "w": 100, "h": 25},    # Descend
+			{"x": 1250, "y": 400, "w": 100, "h": 25},    # Low again
+			{"x": 1400, "y": 500, "w": 150, "h": 40}     # Final platform
+		],
+		"coins": [
+			{"x": 100, "y": 480}, {"x": 340, "y": 410},
+			{"x": 500, "y": 330}, {"x": 680, "y": 250},
+			{"x": 880, "y": 180}, {"x": 1080, "y": 250},
+			{"x": 1280, "y": 330}, {"x": 1450, "y": 430}
+		],
+		"stars": [
+			{"x": 500, "y": 200}, {"x": 850, "y": 100}, {"x": 1300, "y": 250}
+		],
+		"gems": [
+			{"x": 880, "y": 120}
+		],
+		# 💎 Pressure Plates - Step on them to trigger effects
+		"pressure_plates": [
+			{"x": 350, "y": 445, "type": "spawn_enemy", "id": 0},   # Spawns enemy when stepped
+			{"x": 700, "y": 285, "type": "reveal_coin", "id": 1},   # Reveals hidden coins
+			{"x": 1100, "y": 285, "type": "unlock_shortcut", "id": 2}  # Opens shortcut path
+		],
+		# ✨ Magic Runes - Ancient symbols with power-ups
+		"runes": [
+			{"x": 150, "y": 480},    # Starting area - coin bonus
+			{"x": 520, "y": 330},    # Middle area - power boost
+			{"x": 900, "y": 180}     # High area - special reward
+		],
+		"enemies": [
+			{"x": 400, "y": 350, "min_x": 300, "max_x": 480, "type": "slime"},
+			{"x": 800, "y": 200, "min_x": 650, "max_x": 850, "type": "phantom_mage"}
+		],
+		"goal": {"x": 1450, "y": 450}
 	}
 ]
 
@@ -5060,6 +5104,64 @@ func create_pressure_plate(x, y, trigger_type = "enemy", trigger_id = 0):
 	plate.set_meta("trigger_type", trigger_type)
 	plate.set_meta("trigger_id", trigger_id)
 	add_child(plate)
+
+# 🎯 Handle pressure plate activation (called from pressure_plate.gd)
+func on_pressure_plate_activated(trigger_type: String, trigger_id: int):
+	match trigger_type:
+		"spawn_enemy":
+			# Spawn a special enemy near the player
+			if player:
+				var enemy = CharacterBody2D.new()
+				enemy.position = player.position + Vector2(randf_range(-100, 100), -50)
+				enemy.script = load("res://enemy.gd")
+				add_child(enemy)
+				enemies.append(enemy)
+				show_floating_text_in_game("⚠️ Enemy Spawned!")
+		"reveal_coin":
+			# Reveal hidden bonus coins
+			if player:
+				for i in range(5):
+					var coin = Area2D.new()
+					coin.position = player.position + Vector2(randf_range(-80, 80), randf_range(-40, 40))
+					coin.script = load("res://coin.gd")
+					add_child(coin)
+					coins.append(coin)
+				show_floating_text_in_game("💰 Hidden Coins Revealed!")
+		"unlock_shortcut":
+			# Unlock a hidden platform/path
+			show_floating_text_in_game("🗺️ Shortcut Opened!")
+			# Create a bonus platform
+			var shortcut = StaticBody2D.new()
+			shortcut.position = Vector2(1150, 350)
+			var col = CollisionShape2D.new()
+			var rect = RectangleShape2D.new()
+			rect.size = Vector2(80, 20)
+			col.shape = rect
+			shortcut.add_child(col)
+			var visual = ColorRect.new()
+			visual.size = Vector2(80, 20)
+			visual.color = Color(0.3, 0.6, 1, 0.8)  # Glowing blue
+			shortcut.add_child(visual)
+			add_child(shortcut)
+			platforms.append(shortcut)
+			# Animate appearance
+			visual.modulate.a = 0
+			var tw = create_tween()
+			tw.tween_property(visual, "modulate:a", 1.0, 0.5)
+
+func show_floating_text_in_game(text: String):
+	if not player:
+		return
+	var label = Label.new()
+	label.text = text
+	label.position = player.global_position + Vector2(0, -50)
+	label.add_theme_font_size_override("font_size", 18)
+	label.add_theme_color_override("font_color", Color(1, 0.8, 0.3))
+	add_child(label)
+	var tw = create_tween()
+	tw.tween_property(label, "position:y", label.position.y - 40, 1.0)
+	tw.parallel().tween_property(label, "modulate:a", 0.0, 1.0)
+	tw.tween_callback(label.queue_free)
 
 # 🦋 Create a pet companion
 var current_pet: Node2D = null
