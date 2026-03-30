@@ -93,7 +93,8 @@ const ABILITIES = {
 	"phase_shift": {"name": "Phase Shift", "desc": "Press Q to dodge through enemies", "icon": "👻"},
 	"tracking_projectile": {"name": "Tracking Shot", "desc": "Press T to fire homing missile", "icon": "🎯"},
 	"magic_wand": {"name": "Magic Wand", "desc": "Press V to fire magic blast", "icon": "🪄"},
-	"health_regen": {"name": "Health Regen", "desc": "Slowly recover health over time", "icon": "❤️"}
+	"health_regen": {"name": "Health Regen", "desc": "Slowly recover health over time", "icon": "❤️"},
+	"gravity_flip": {"name": "Gravity Flip", "desc": "Jump + direction in air to flip gravity", "icon": "⬇️"}
 }
 
 # Skill Tree System - Ability upgrades
@@ -1523,6 +1524,52 @@ var levels = [
 			{"x": 800, "y": 200, "min_x": 650, "max_x": 850, "type": "phantom_mage"}
 		],
 		"goal": {"x": 1450, "y": 450}
+	},
+	# NEW! Gravity Core - Metroidvania puzzle level (v7.1)
+	{
+		"name": "Gravity Core",
+		"bg_color": Color(0.05, 0.1, 0.2),
+		"gravity_theme": true,  # 特殊重力主题
+		"platforms": [
+			{"x": 50, "y": 550, "w": 150, "h": 30},      # Starting platform
+			{"x": 250, "y": 480, "w": 100, "h": 25},     # Step 1
+			{"x": 400, "y": 400, "w": 80, "h": 25},       # Middle - 需要重力翻转到达
+			{"x": 550, "y": 320, "w": 100, "h": 25},     # Upper path
+			{"x": 400, "y": 220, "w": 80, "h": 25},      # Ceiling path - 需要重力翻转
+			{"x": 650, "y": 150, "w": 100, "h": 25},     # High ceiling
+			{"x": 850, "y": 220, "w": 80, "h": 25},      # Descend
+			{"x": 1000, "y": 320, "w": 100, "h": 25},    # Middle
+			{"x": 1150, "y": 420, "w": 80, "h": 25},     # Low again
+			{"x": 1300, "y": 500, "w": 150, "h": 30}     # Final platform
+		],
+		"coins": [
+			{"x": 100, "y": 480}, {"x": 280, "y": 420},
+			{"x": 420, "y": 340}, {"x": 450, "y": 160},  # 需要翻转重力才能拿到
+			{"x": 680, "y": 90}, {"x": 870, "y": 160},
+			{"x": 1030, "y": 260}, {"x": 1170, "y": 360},
+			{"x": 1350, "y": 440}
+		],
+		"stars": [
+			{"x": 450, "y": 100}, {"x": 800, "y": 150}, {"x": 1350, "y": 400}
+		],
+		"gems": [
+			{"x": 680, "y": 80}, {"x": 1030, "y": 200}
+		],
+		# Powerup - 包含重力翻转能力!
+		"powerups": [
+			{"x": 550, "y": 250, "type": "gravity_flip"}
+		],
+		# 符文 - 提供奖励
+		"runes": [
+			{"x": 400, "y": 280}, {"x": 870, "y": 150}
+		],
+		"enemies": [
+			{"x": 300, "y": 440, "min_x": 250, "max_x": 350, "type": "slime"},
+			{"x": 600, "y": 270, "min_x": 550, "max_x": 650, "type": "phantom_mage"},
+			{"x": 900, "y": 170, "min_x": 850, "max_x": 950, "type": "orb"},
+			{"x": 1200, "y": 370, "min_x": 1150, "max_x": 1250, "type": "chaser"}
+		],
+		"goal": {"x": 1350, "y": 450}
 	}
 ]
 
@@ -1611,6 +1658,7 @@ func clear_ice_crystals():
 func clear_effects():
 	clear_ice_crystals()
 	clear_nebula_effect()
+	clear_gravity_effect()
 	clear_void_effect()
 	clear_phoenix_effect()
 	clear_abyss_effect()
@@ -2185,6 +2233,74 @@ func clear_void_effect():
 	if void_container:
 		void_container.queue_free()
 		void_container = null
+
+# 🌀 Gravity effect for Gravity Core level
+var gravity_container: Node2D = null
+
+func create_gravity_effect():
+	if gravity_container:
+		gravity_container.queue_free()
+	
+	gravity_container = Node2D.new()
+	gravity_container.name = "GravityEffect"
+	add_child(gravity_container)
+	gravity_container.z_index = -60
+	
+	# Create floating gravity particles - purple/blue swirl
+	for i in range(35):
+		var particle = Polygon2D.new()
+		var pts = PackedVector2Array()
+		for j in range(6):
+			var angle = j * TAU / 6
+			pts.append(Vector2(cos(angle), sin(angle)) * randf_range(3, 7))
+		particle.polygon = pts
+		
+		# Gravity colors - purple, cyan, magenta
+		var color_choice = randi() % 3
+		if color_choice == 0:
+			particle.color = Color(0.4, 0.3, 0.8, randf_range(0.3, 0.6))
+		elif color_choice == 1:
+			particle.color = Color(0.3, 0.7, 0.9, randf_range(0.3, 0.6))
+		else:
+			particle.color = Color(0.7, 0.3, 0.7, randf_range(0.3, 0.6))
+		
+		particle.position = Vector2(randf() * 1400, randf() * 800)
+		gravity_container.add_child(particle)
+		
+		# Spiral animation
+		var tween = create_tween()
+		var start_pos = particle.position
+		var spiral_offset = randf_range(-40, 40)
+		tween.set_loops()
+		tween.tween_property(particle, "position:y", start_pos.y + spiral_offset, randf_range(2.0, 4.0))
+		tween.tween_property(particle, "position:y", start_pos.y, randf_range(2.0, 4.0))
+		tween.parallel().tween_property(particle, "rotation", particle.rotation + randf_range(-0.5, 0.5), 3.0)
+	
+	# Create gravity field lines (arcs)
+	for i in range(12):
+		var arc = Polygon2D.new()
+		var pts = PackedVector2Array()
+		var center_x = randf() * 1400
+		var center_y = randf() * 800
+		for j in range(10):
+			var angle = (j as float / 10) * PI
+			var radius = randf_range(30, 60)
+			pts.append(Vector2(cos(angle) * radius, sin(angle) * radius))
+		arc.polygon = pts
+		arc.color = Color(0.5, 0.4, 0.9, randf_range(0.15, 0.35))
+		arc.position = Vector2(center_x, center_y)
+		gravity_container.add_child(arc)
+		
+		# Rotate animation
+		var tw = create_tween()
+		tw.set_loops()
+		tw.tween_property(arc, "rotation", randf_range(0.2, 0.5), randf_range(4.0, 7.0))
+		tw.tween_property(arc, "rotation", -randf_range(0.2, 0.5), randf_range(4.0, 7.0))
+
+func clear_gravity_effect():
+	if gravity_container:
+		gravity_container.queue_free()
+		gravity_container = null
 
 # 🔥 Phoenix effect for Phoenix Realm level
 var phoenix_container: Node2D = null
@@ -2801,7 +2917,7 @@ func show_start_screen():
 	
 	# Version in bottom right
 	var version = Label.new()
-	version.text = "v1.6.0"
+	version.text = "v1.7.0"
 	version.position = Vector2(650, 550)
 	version.add_theme_font_size_override("font_size", 14)
 	version.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
@@ -2821,7 +2937,8 @@ var shop_items = {
 	"energy_shield": {"name": "Energy Shield", "desc": "Press F to block 1 hit", "icon": "🛡️", "price": 450},
 	"phase_shift": {"name": "Phase Shift", "desc": "Press Q to dodge through enemies", "icon": "👻", "price": 550},
 	"magic_wand": {"name": "Magic Wand", "desc": "Press V to fire magic blast", "icon": "🪄", "price": 600},
-	"health_regen": {"name": "Health Regen", "desc": "Slowly recover health over time", "icon": "❤️", "price": 350}
+	"health_regen": {"name": "Health Regen", "desc": "Slowly recover health over time", "icon": "❤️", "price": 350},
+	"gravity_flip": {"name": "Gravity Flip", "desc": "Jump + direction to flip gravity", "icon": "🔄", "price": 600}
 }
 
 func show_shop():
@@ -4094,6 +4211,12 @@ func setup_level(level_index):
 	else:
 		clear_nebula_effect()
 	
+	# 🌀 Create gravity effect for Gravity Core level
+	if level.get("gravity_theme", false):
+		create_gravity_effect()
+	else:
+		clear_gravity_effect()
+	
 	# 🌑 Create void effect for Void Dimension
 	if level.get("void_theme", false):
 		create_void_effect()
@@ -4320,6 +4443,10 @@ func apply_player_abilities(p):
 		p.activate_tracking_projectile_ability()
 	if has_ability("magic_wand"):
 		p.can_magic_wand = true
+	if has_ability("health_regen"):
+		p.has_health_regen = true
+	if has_ability("gravity_flip"):
+		p.can_gravity_flip = true
 	if has_ability("health_regen"):
 		p.has_health_regen = true
 
@@ -5135,7 +5262,7 @@ var powerups: Array[Area2D] = []
 func create_powerup(x, y, powerup_type = null):
 	var powerup = Area2D.new()
 	powerup.position = Vector2(x, y)
-	powerup.script = load("res://powerup.gd")
+	powerup.script = load("res://scripts/powerup.gd")
 	# Set specific type if provided
 	if powerup_type != null:
 		# Force specific type by setting it after ready
@@ -6159,7 +6286,7 @@ func trigger_mystery_gift():
 	var gift_pos = player.global_position + Vector2(randf_range(-50, 50), -30)
 	var powerup = Area2D.new()
 	powerup.position = gift_pos
-	powerup.script = load("res://powerup.gd")
+	powerup.script = load("res://scripts/powerup.gd")
 	get_parent().add_child(powerup)
 	
 	show_event_notification("🎁 Mystery Gift!")

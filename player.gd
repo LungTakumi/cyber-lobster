@@ -34,6 +34,12 @@ var can_energy_shield: bool = false
 var can_phase_shift: bool = false
 var can_tracking_projectile: bool = false
 
+# 重力反转能力 (Metroidvania 新功能!)
+var can_gravity_flip: bool = false
+var gravity_flipped: bool = false
+var gravity_flip_cooldown: float = 0.0
+var gravity_flip_cooldown_max: float = 2.0
+
 # 状态
 var is_invincible: bool = false
 var invincible_timer: float = 0.0
@@ -64,9 +70,14 @@ func _ready():
 		max_jumps = 2
 
 func _physics_process(delta):
-	# 应用重力
+	# 应用重力（支持重力反转）
+	var gravity_dir = -1 if gravity_flipped else 1
 	if not is_on_floor():
-		velocity.y += gravity * delta
+		velocity.y += gravity * delta * gravity_dir
+	
+	# 处理重力反转冷却
+	if gravity_flip_cooldown > 0:
+		gravity_flip_cooldown -= delta
 	
 	# 处理水平移动 - 使用 Input.is_action_pressed 支持多点触控
 	var direction: float = 0.0
@@ -146,6 +157,17 @@ func facing_direction() -> int:
 	return 1  # 默认向右
 
 func _handle_jump():
+	# 重力反转跳跃 - 可以在空中反转重力
+	if can_gravity_flip and gravity_flip_cooldown <= 0:
+		# 按跳跃键时如果在空中且按下了方向键，反转重力
+		if not is_on_floor():
+			var dir = 0
+			if Input.is_action_pressed("move_left"): dir -= 1
+			if Input.is_action_pressed("move_right"): dir += 1
+			if dir != 0:
+				flip_gravity()
+				return
+	
 	# 墙壁跳跃 (Wall Jump) - 按跳跃键从墙壁跳开
 	if can_wall_climb and is_wall_sliding:
 		# 获取墙壁法线方向
@@ -156,12 +178,56 @@ func _handle_jump():
 	
 	# 普通地面跳跃
 	if is_on_floor():
-		velocity.y = jump_force
+		velocity.y = jump_force * (1 if not gravity_flipped else -1)
 		current_jumps = 1
 	# 双段跳跃
 	elif has_permanent_double_jump and current_jumps < max_jumps:
-		velocity.y = jump_force
+		velocity.y = jump_force * (1 if not gravity_flipped else -1)
 		current_jumps += 1
+
+func flip_gravity():
+	if gravity_flip_cooldown > 0:
+		return
+	gravity_flipped = not gravity_flipped
+	gravity_flip_cooldown = gravity_flip_cooldown_max
+	
+	# 视觉反馈 - 颜色变化
+	if gravity_flipped:
+		modulate = Color(0.5, 0.8, 1, 1)  # 蓝色表示反转
+	else:
+		modulate = Color.WHITE
+	
+	# 给一个小初速度帮助玩家适应
+	velocity.y = 100 if gravity_flipped else -100
+	
+	# 创建特效
+	spawn_gravity_flip_effect()
+	
+	# 播放音效（如果有）
+	var main = get_tree().get_first_node_in_group("game")
+	if main and main.audio_manager:
+		# 暂时不调用具体方法，避免报错
+		pass
+
+func spawn_gravity_flip_effect():
+	var parent = get_parent()
+	if parent:
+		# 创建环状扩散特效
+		for i in range(8):
+			var ring = Polygon2D.new()
+			var pts = PackedVector2Array()
+			for j in range(12):
+				var angle = j * TAU / 12
+				pts.append(Vector2(cos(angle), sin(angle)) * (20 + i * 10))
+			ring.polygon = pts
+			ring.color = Color(0.3, 0.7, 1, 0.8)
+			ring.position = global_position
+			parent.add_child(ring)
+			
+			var tw = create_tween()
+			tw.tween_property(ring, "scale", Vector2(2, 2), 0.4)
+			tw.parallel().tween_property(ring, "modulate:a", 0.0, 0.4)
+			tw.tween_callback(ring.queue_free)
 
 # 激活无敌
 func activate_invincible(duration: float):
