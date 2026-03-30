@@ -58,6 +58,18 @@ var attack_hitbox: Area2D = null
 # 攻击特效
 var attack_sprite: Polygon2D = null
 
+# 冲刺系统 (Dash Ability - Metroidvania 新功能!)
+var is_dashing: bool = false
+var dash_cooldown: float = 0.0
+var dash_cooldown_max: float = 1.5  # 冲刺冷却1.5秒
+var dash_duration: float = 0.0
+var dash_duration_max: float = 0.15  # 冲刺持续0.15秒
+var dash_speed: float = 800.0  # 冲刺速度
+var dash_direction: Vector2 = Vector2.RIGHT
+var can_dash_while_airborne: bool = true  # 空中冲刺
+var dash_count: int = 0
+var max_dash_count: int = 1  # 空中最多冲刺次数
+
 func _ready():
 	# 设置 floor_check
 	floor_check.position = Vector2(0, 20)
@@ -101,6 +113,9 @@ func _physics_process(delta):
 		velocity.y = min(velocity.y, wall_slide_speed)  # 限制下落速度
 	else:
 		is_wall_sliding = false
+	
+	# 🌀 冲刺系统 (Dash)
+	handle_dash(delta)
 	
 	# 处理跳跃
 	if Input.is_action_just_pressed("jump"):
