@@ -71,7 +71,8 @@ var save_data = {
 	"best_times": {},         # 最佳时间
 	"total_gems": 0,         # 总宝石数
 	"level_gems": {},        # 每个关卡的宝石数
-	"completed_challenges": []  # 已完成的挑战
+	"completed_challenges": [],  # 已完成的挑战
+	"puzzle_keys": {},           # 已收集的谜题钥匙 {key_type: count}
 }
 
 # Time Trial Mode
@@ -426,6 +427,25 @@ func show_ability_notification(ability_name):
 		fade_tween.tween_property(notif, "position:y", 50, 0.5)
 		fade_tween.tween_callback(notif.queue_free)
 
+# 🗝️ Puzzle Key functions
+func collect_puzzle_key(key_type: String):
+	if not save_data.has("puzzle_keys"):
+		save_data["puzzle_keys"] = {}
+	if not save_data["puzzle_keys"].has(key_type):
+		save_data["puzzle_keys"][key_type] = 0
+	save_data["puzzle_keys"][key_type] += 1
+	save_save_data()
+
+func has_puzzle_key(key_type: String) -> bool:
+	return save_data.has("puzzle_keys") and save_data["puzzle_keys"].has(key_type) and save_data["puzzle_keys"][key_type] > 0
+
+func use_puzzle_key(key_type: String) -> bool:
+	if has_puzzle_key(key_type):
+		save_data["puzzle_keys"][key_type] -= 1
+		save_save_data()
+		return true
+	return false
+
 # ⏱️ Timer functions
 func start_level_timer():
 	level_start_time = Time.get_ticks_msec() / 1000.0
@@ -459,7 +479,9 @@ var levels = [
 		"enemies": [{"x": 150, "y": 460, "min_x": 0, "max_x": 300}],
 		"goal": {"x": 900, "y": 350},
 		"checkpoint": {"x": 400, "y": 360},
-		"secret_area": {"x": 150, "y": 200, "w": 100, "h": 100}
+		"secret_area": {"x": 150, "y": 200, "w": 100, "h": 100},
+		"puzzle_key": {"x": 250, "y": 450, "type": "silver"},
+		"locked_door": {"x": 750, "y": 340, "key_type": "silver"}
 	},
 	{
 		"name": "Sky Bridges",
@@ -4228,6 +4250,14 @@ func setup_level(level_index):
 		for pp in level["pressure_plates"]:
 			create_pressure_plate(pp.x, pp.y, pp.get("type", "enemy"), pp.get("id", 0))
 	
+	# Create puzzle keys (if defined in level)
+	if level.has("puzzle_key"):
+		create_puzzle_key(level["puzzle_key"].x, level["puzzle_key"].y, level["puzzle_key"].get("type", "silver"))
+	
+	# Create locked doors (if defined in level)
+	if level.has("locked_door"):
+		create_locked_door(level["locked_door"].x, level["locked_door"].y, level["locked_door"].get("key_type", "silver"))
+	
 	# Create goal
 	if level.has("goal"):
 		create_goal(level.goal.x, level.goal.y)
@@ -5104,6 +5134,29 @@ func create_pressure_plate(x, y, trigger_type = "enemy", trigger_id = 0):
 	plate.set_meta("trigger_type", trigger_type)
 	plate.set_meta("trigger_id", trigger_id)
 	add_child(plate)
+
+# 🗝️ Create a puzzle key
+var puzzle_keys: Array[Area2D] = []
+
+func create_puzzle_key(x, y, key_type = "silver"):
+	var key = Area2D.new()
+	key.position = Vector2(x, y)
+	key.script = load("res://puzzle_key.gd")
+	if key_type != null:
+		key.set_meta("key_type", key_type)
+	add_child(key)
+	puzzle_keys.append(key)
+
+# 🔒 Create a locked door
+var locked_doors: Array[Area2D] = []
+
+func create_locked_door(x, y, key_type = "silver"):
+	var door = Area2D.new()
+	door.position = Vector2(x, y)
+	door.script = load("res://locked_door.gd")
+	door.set_meta("required_key_type", key_type)
+	add_child(door)
+	locked_doors.append(door)
 
 # 🎯 Handle pressure plate activation (called from pressure_plate.gd)
 func on_pressure_plate_activated(trigger_type: String, trigger_id: int):
