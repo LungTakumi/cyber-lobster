@@ -576,13 +576,29 @@ func create_dash_effect():
 func create_dash_ghost():
 	var ghost = Sprite2D.new()
 	# 使用玩家的纹理（如果有）
-	if sprite and sprite.texture:
-		ghost.texture = sprite.texture
+	var player_sprite = get_node_or_null("Sprite2D")
+	if player_sprite and player_sprite.texture:
+		ghost.texture = player_sprite.texture
 		ghost.modulate = Color(1, 1, 1, 0.4)
 		ghost.position = position
 		ghost.scale = scale
+		# 保持朝向一致
+		if player_sprite.has("flip_h"):
+			ghost.flip_h = player_sprite.flip_h
 		get_parent().add_child(ghost)
 		
 		var tw = create_tween()
 		tw.tween_property(ghost, "modulate:a", 0.0, 0.15)
 		tw.tween_callback(ghost.queue_free)
+	else:
+		# 如果没有 sprite，创建一个简单的方块残影
+		var ghost_rect = Polygon2D.new()
+		ghost_rect.polygon = PackedVector2Array([Vector2(-10, -15), Vector2(10, -15), Vector2(10, 15), Vector2(-10, 15)])
+		ghost_rect.color = Color(0.4, 0.8, 1.0, 0.4)
+		ghost_rect.position = position
+		ghost_rect.scale = scale
+		get_parent().add_child(ghost_rect)
+		
+		var tw = create_tween()
+		tw.tween_property(ghost_rect, "modulate:a", 0.0, 0.15)
+		tw.tween_callback(ghost_rect.queue_free)
